@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
@@ -12,6 +11,8 @@ import { EnhancedNavbar } from "@/app/components/ui/enhanced-navbar";
 import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
+import { laporanService } from "@/services/laporanService";
+import { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
   id: string;
@@ -40,7 +41,9 @@ export default function NewFinanceAdminPage() {
   const [currentDate, setCurrentDate] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
+  const [editingReport, setEditingReport] =
+    useState<LaporanHarianResponse | null>(null);
 
   const [formData, setFormData] = useState<FinanceFormData>({
     kasReceivable: [],
@@ -61,7 +64,7 @@ export default function NewFinanceAdminPage() {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "admin") {
+    if (!storedUserName || userRole !== "ROLE_KEUANGAN") {
       router.push("/");
       return;
     }
@@ -78,13 +81,24 @@ export default function NewFinanceAdminPage() {
     };
     setCurrentDate(today.toLocaleDateString("id-ID", options));
 
-    // Load saved reports
+    // Load saved reports dari backend
     loadSavedReports();
   }, [router]);
 
-  const loadSavedReports = () => {
-    const reports = JSON.parse(localStorage.getItem("financeReports") || "[]");
-    setSavedReports(reports);
+  const loadSavedReports = async () => {
+    try {
+      const reports = await laporanService.getMyLaporan();
+      // Filter hanya laporan keuangan
+      const financeReports = reports.filter(
+        (report) =>
+          report.divisi === "ROLE_KEUANGAN" || report.divisi === "Keuangan"
+      );
+      setSavedReports(financeReports);
+    } catch (err) {
+      console.error("Gagal memuat riwayat laporan:", err);
+      setMessage("Gagal memuat riwayat laporan dari server.");
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   const handleLogout = () => {
@@ -102,91 +116,222 @@ export default function NewFinanceAdminPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setMessage("");
 
-    // Validate that at least one section has data
-    const hasData = Object.values(formData).some(
-      (section) => section.length > 0
-    );
+    // 1. Collect all details from form into one array
+    const semuaRincian = [
+      // KAS
+      ...formData.kasReceivable.map((row) => ({
+        ...row,
+        kategoriUtama: "KAS",
+        kategoriSub: "PENERIMAAN",
+        satuan: "IDR",
+      })),
+      ...formData.kasPayable.map((row) => ({
+        ...row,
+        kategoriUtama: "KAS",
+        kategoriSub: "PENGELUARAN",
+        satuan: "IDR",
+      })),
+      ...formData.kasFinalBalance.map((row) => ({
+        ...row,
+        kategoriUtama: "KAS",
+        kategoriSub: "SALDO_AKHIR",
+        satuan: "IDR",
+      })),
+      // PIUTANG
+      ...formData.piutangNew.map((row) => ({
+        ...row,
+        kategoriUtama: "PIUTANG",
+        kategoriSub: "BARU",
+        satuan: "IDR",
+      })),
+      ...formData.piutangCollection.map((row) => ({
+        ...row,
+        kategoriUtama: "PIUTANG",
+        kategoriSub: "PENAGIHAN",
+        satuan: "IDR",
+      })),
+      ...formData.piutangFinalBalance.map((row) => ({
+        ...row,
+        kategoriUtama: "PIUTANG",
+        kategoriSub: "SALDO_AKHIR",
+        satuan: "IDR",
+      })),
+      // HUTANG
+      ...formData.hutangNew.map((row) => ({
+        ...row,
+        kategoriUtama: "HUTANG",
+        kategoriSub: "BARU",
+        satuan: "IDR",
+      })),
+      ...formData.hutangPayment.map((row) => ({
+        ...row,
+        kategoriUtama: "HUTANG",
+        kategoriSub: "PEMBAYARAN",
+        satuan: "IDR",
+      })),
+      ...formData.hutangFinalBalance.map((row) => ({
+        ...row,
+        kategoriUtama: "HUTANG",
+        kategoriSub: "SALDO_AKHIR",
+        satuan: "IDR",
+      })),
+      // MODAL
+      ...formData.modalStock.map((row) => ({
+        ...row,
+        kategoriUtama: "MODAL",
+        kategoriSub: "STOK",
+        satuan: "IDR",
+      })),
+      ...formData.modalEquipment.map((row) => ({
+        ...row,
+        kategoriUtama: "MODAL",
+        kategoriSub: "PERALATAN",
+        satuan: "IDR",
+      })),
+      ...formData.modalFinalBalance.map((row) => ({
+        ...row,
+        kategoriUtama: "MODAL",
+        kategoriSub: "TOTAL",
+        satuan: "IDR",
+      })),
+    ];
 
-    if (!hasData) {
+    if (semuaRincian.length === 0) {
       setMessage("Minimal satu bagian harus diisi.");
       setIsLoading(false);
       return;
     }
 
-    // Simulate saving
-    setTimeout(() => {
-      const reportData = {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split("T")[0],
-        division: "Keuangan & Administrasi",
-        data: formData,
-        createdAt: new Date().toISOString(),
-        createdBy: userName,
+    // 2. Format data according to backend expectations
+    const payload: LaporanHarianRequest = {
+      tanggalLaporan: new Date().toISOString().split("T")[0],
+      rincian: semuaRincian.map((item) => ({
+        kategoriUtama: item.kategoriUtama,
+        kategoriSub: item.kategoriSub || null,
+        keterangan: item.description,
+        nilaiKuantitas: item.amount || null,
+        satuan: item.satuan,
+      })),
+    };
+
+    try {
+      if (editingReport) {
+        // Update existing report
+        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        setMessage("Laporan keuangan berhasil diperbarui!");
+        setEditingReport(null);
+      } else {
+        // Create new report
+        await laporanService.createLaporan(payload);
+        setMessage("Laporan keuangan berhasil disimpan ke server!");
+      }
+
+      loadSavedReports(); // Reload history from server
+      clearForm(); // Clear form
+    } catch (err) {
+      console.error("Gagal menyimpan laporan:", err);
+      setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setMessage(""), 3000);
+    }
+  };
+
+  const handleViewReport = (report: LaporanHarianResponse) => {
+    // Convert backend data back to form format
+    const convertedData: FinanceFormData = {
+      kasReceivable: [],
+      kasPayable: [],
+      kasFinalBalance: [],
+      piutangNew: [],
+      piutangCollection: [],
+      piutangFinalBalance: [],
+      hutangNew: [],
+      hutangPayment: [],
+      hutangFinalBalance: [],
+      modalStock: [],
+      modalEquipment: [],
+      modalFinalBalance: [],
+    };
+
+    report.rincian.forEach((item) => {
+      const formRow: FormRow = {
+        id: Date.now().toString() + Math.random(),
+        description: item.keterangan,
+        amount: item.nilaiKuantitas || 0,
       };
 
-      const existingReports = JSON.parse(
-        localStorage.getItem("financeReports") || "[]"
-      );
-      existingReports.unshift(reportData);
-      localStorage.setItem("financeReports", JSON.stringify(existingReports));
+      // Map berdasarkan kategori
+      if (item.kategoriUtama === "KAS") {
+        if (item.kategoriSub === "PENERIMAAN") {
+          convertedData.kasReceivable.push(formRow);
+        } else if (item.kategoriSub === "PENGELUARAN") {
+          convertedData.kasPayable.push(formRow);
+        } else if (item.kategoriSub === "SALDO_AKHIR") {
+          convertedData.kasFinalBalance.push(formRow);
+        }
+      } else if (item.kategoriUtama === "PIUTANG") {
+        if (item.kategoriSub === "BARU") {
+          convertedData.piutangNew.push(formRow);
+        } else if (item.kategoriSub === "PENAGIHAN") {
+          convertedData.piutangCollection.push(formRow);
+        } else if (item.kategoriSub === "SALDO_AKHIR") {
+          convertedData.piutangFinalBalance.push(formRow);
+        }
+      } else if (item.kategoriUtama === "HUTANG") {
+        if (item.kategoriSub === "BARU") {
+          convertedData.hutangNew.push(formRow);
+        } else if (item.kategoriSub === "PEMBAYARAN") {
+          convertedData.hutangPayment.push(formRow);
+        } else if (item.kategoriSub === "SALDO_AKHIR") {
+          convertedData.hutangFinalBalance.push(formRow);
+        }
+      } else if (item.kategoriUtama === "MODAL") {
+        if (item.kategoriSub === "STOK") {
+          convertedData.modalStock.push(formRow);
+        } else if (item.kategoriSub === "PERALATAN") {
+          convertedData.modalEquipment.push(formRow);
+        } else if (item.kategoriSub === "TOTAL") {
+          convertedData.modalFinalBalance.push(formRow);
+        }
+      }
+    });
 
-      setMessage("Laporan keuangan berhasil disimpan!");
-      loadSavedReports();
-
-      // Reset form
-      setFormData({
-        kasReceivable: [],
-        kasPayable: [],
-        kasFinalBalance: [],
-        piutangNew: [],
-        piutangCollection: [],
-        piutangFinalBalance: [],
-        hutangNew: [],
-        hutangPayment: [],
-        hutangFinalBalance: [],
-        modalStock: [],
-        modalEquipment: [],
-        modalFinalBalance: [],
-      });
-
-      setTimeout(() => setMessage(""), 3000);
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  const handleViewReport = (report: any) => {
-    setFormData(report.data);
+    setFormData(convertedData);
     setMessage(
-      `Menampilkan laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Menampilkan laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleEditReport = (report: any) => {
-    setFormData(report.data);
+  const handleEditReport = (report: LaporanHarianResponse) => {
+    // Same logic as handleViewReport for editing
+    handleViewReport(report);
+    setEditingReport(report);
     setMessage(
-      `Mode edit: Laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Mode edit: Laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleDeleteReport = (report: any) => {
-    if (confirm("Apakah Anda yakin ingin menghapus laporan ini?")) {
-      const existingReports = JSON.parse(
-        localStorage.getItem("financeReports") || "[]"
-      );
-      const updatedReports = existingReports.filter(
-        (r: any) => r.id !== report.id
-      );
-      localStorage.setItem("financeReports", JSON.stringify(updatedReports));
-      loadSavedReports();
-      setMessage("Laporan berhasil dihapus!");
-      setTimeout(() => setMessage(""), 3000);
+  const handleDeleteReport = async (report: LaporanHarianResponse) => {
+    if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
+      try {
+        await laporanService.deleteLaporan(report.laporanId);
+        setMessage("Laporan berhasil dihapus dari server!");
+        loadSavedReports();
+        setTimeout(() => setMessage(""), 3000);
+      } catch (err) {
+        console.error("Gagal menghapus laporan:", err);
+        setMessage("Gagal menghapus laporan dari server.");
+        setTimeout(() => setMessage(""), 3000);
+      }
     }
   };
 
@@ -205,6 +350,7 @@ export default function NewFinanceAdminPage() {
       modalEquipment: [],
       modalFinalBalance: [],
     });
+    setEditingReport(null);
     setMessage("Form telah dikosongkan");
     setTimeout(() => setMessage(""), 2000);
   };
@@ -226,12 +372,27 @@ export default function NewFinanceAdminPage() {
           {/* Left Panel - Form Editor */}
           <div className="space-y-6">
             <EnhancedFormCard
-              title="Editor Laporan Keuangan"
+              title={
+                editingReport
+                  ? "Edit Laporan Keuangan"
+                  : "Editor Laporan Keuangan"
+              }
               onClear={clearForm}
               onSubmit={handleSubmit}
               isLoading={isLoading}
               divisionColor="blue"
             >
+              {editingReport && (
+                <Alert className="border-orange-200 bg-orange-50 mb-4">
+                  <AlertDescription className="text-orange-800">
+                    Sedang mengedit laporan tanggal{" "}
+                    {new Date(editingReport.tanggalLaporan).toLocaleDateString(
+                      "id-ID"
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
               {/* A. KAS */}
               <div className="space-y-4">
                 <h3 className="text-md font-bold text-blue-600 border-b border-blue-200 pb-2">
@@ -384,6 +545,8 @@ export default function NewFinanceAdminPage() {
                   className={
                     message.includes("berhasil")
                       ? "border-green-200 bg-green-50"
+                      : message.includes("Gagal") || message.includes("gagal")
+                      ? "border-red-200 bg-red-50"
                       : "border-blue-200 bg-blue-50"
                   }
                 >
@@ -391,6 +554,8 @@ export default function NewFinanceAdminPage() {
                     className={
                       message.includes("berhasil")
                         ? "text-green-800"
+                        : message.includes("Gagal") || message.includes("gagal")
+                        ? "text-red-800"
                         : "text-blue-800"
                     }
                   >
@@ -408,8 +573,23 @@ export default function NewFinanceAdminPage() {
                   disabled={isLoading}
                 >
                   <Save className="h-5 w-5 mr-2" />
-                  {isLoading ? "Menyimpan..." : "Simpan Laporan"}
+                  {isLoading
+                    ? "Menyimpan..."
+                    : editingReport
+                    ? "Perbarui Laporan"
+                    : "Simpan Laporan"}
                 </Button>
+
+                {editingReport && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={clearForm}
+                  >
+                    Batal Edit
+                  </Button>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <Button type="button" variant="outline" size="lg">

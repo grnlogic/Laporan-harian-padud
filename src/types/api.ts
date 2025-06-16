@@ -53,3 +53,25 @@ export interface LoginResponse {
 export interface RegisterResponse {
   message: string;
 }
+
+// Tambahan untuk Keuangan
+export interface FinanceFormData {
+  kasReceivable: FormRow[];
+  kasPayable: FormRow[];
+  kasFinalBalance: FormRow[];
+  piutangNew: FormRow[];
+  piutangCollection: FormRow[];
+  piutangFinalBalance: FormRow[];
+  hutangNew: FormRow[];
+  hutangPayment: FormRow[];
+  hutangFinalBalance: FormRow[];
+  modalStock: FormRow[];
+  modalEquipment: FormRow[];
+  modalFinalBalance: FormRow[];
+}
+
+export interface FormRow {
+  id: string;
+  description: string;
+  amount: number;
+}
