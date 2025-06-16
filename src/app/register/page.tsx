@@ -24,6 +24,7 @@ import {
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Building2, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { authService } from "@/lib/api";
 
 export default function RegisterPage() {
   const [formData, setFormData] = useState({
@@ -39,11 +40,11 @@ export default function RegisterPage() {
   const router = useRouter();
 
   const divisions = [
-    { value: "keuangan", label: "Divisi Keuangan & Administrasi" },
-    { value: "pemasaran", label: "Divisi Pemasaran & Penjualan" },
-    { value: "produksi", label: "Divisi Produksi" },
-    { value: "gudang", label: "Divisi Distribusi & Gudang" },
-    { value: "hrd", label: "Divisi HRD" },
+    { value: "Keuangan", label: "Divisi Keuangan & Administrasi" },
+    { value: "Pemasaran", label: "Divisi Pemasaran & Penjualan" },
+    { value: "Produksi", label: "Divisi Produksi" },
+    { value: "Distribusi & Gudang", label: "Divisi Distribusi & Gudang" },
+    { value: "HRD", label: "Divisi HRD" },
   ];
 
   const handleInputChange = (field: string, value: string) => {
@@ -57,6 +58,7 @@ export default function RegisterPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
+    setSuccess("");
     setIsLoading(true);
 
     // Validation
@@ -84,43 +86,58 @@ export default function RegisterPage() {
       return;
     }
 
-    // Simulate registration
-    setTimeout(() => {
-      // In real app, this would be an API call
-      const existingUsers = JSON.parse(
-        localStorage.getItem("registeredUsers") || "[]"
-      );
-
-      // Check if username already exists
-      if (
-        existingUsers.some((user: any) => user.username === formData.username)
-      ) {
-        setError("Username sudah digunakan. Silakan pilih username lain.");
-        setIsLoading(false);
-        return;
-      }
-
-      // Add new user
-      const newUser = {
-        id: Date.now().toString(),
-        fullName: formData.fullName,
-        username: formData.username,
-        password: formData.password, // In real app, this would be hashed
-        division: formData.division,
-        createdAt: new Date().toISOString(),
+    try {
+      // Fungsi kecil untuk menerjemahkan nama divisi ke format Role Backend
+      const mapDivisionToRoleEnum = (division: string): string => {
+        switch (division.toLowerCase()) {
+          case "keuangan":
+            return "ROLE_KEUANGAN";
+          case "pemasaran":
+            return "ROLE_PEMASARAN";
+          case "produksi":
+            return "ROLE_PRODUKSI";
+          case "distribusi & gudang":
+            return "ROLE_GUDANG";
+          case "hrd":
+            return "ROLE_HRD";
+          default:
+            throw new Error("Divisi tidak valid");
+        }
       };
 
-      existingUsers.push(newUser);
-      localStorage.setItem("registeredUsers", JSON.stringify(existingUsers));
+      const roleForBackend = mapDivisionToRoleEnum(formData.division);
+
+      // Panggil API register ke backend dengan data yang sudah benar
+      await authService.register({
+        username: formData.username,
+        password: formData.password,
+        fullName: formData.fullName,
+        role: roleForBackend, // Mengirim role yang sudah diterjemahkan
+      });
 
       setSuccess("Registrasi berhasil! Anda akan diarahkan ke halaman login.");
 
+      // Reset form
+      setFormData({
+        fullName: "",
+        username: "",
+        password: "",
+        confirmPassword: "",
+        division: "",
+      });
+
+      // Redirect ke login setelah 2 detik
       setTimeout(() => {
         router.push("/");
       }, 2000);
-
+    } catch (error: any) {
+      console.error("Registration error:", error);
+      setError(
+        error.message || "Registrasi gagal. Username mungkin sudah digunakan."
+      );
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -260,6 +277,19 @@ export default function RegisterPage() {
                   Masuk di sini
                 </Link>
               </p>
+            </div>
+
+            {/* Info untuk development */}
+            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+              <p className="text-sm font-medium text-gray-700 mb-2">
+                Info Registrasi:
+              </p>
+              <div className="text-xs text-gray-600 space-y-1">
+                <p>• Data akan disimpan ke database melalui API backend</p>
+                <p>• Username harus unik</p>
+                <p>• Role otomatis diset sebagai ADMIN</p>
+                <p>• Setelah berhasil, akan diarahkan ke halaman login</p>
+              </div>
             </div>
           </CardContent>
         </Card>

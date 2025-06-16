@@ -52,6 +52,8 @@ import {
   BarChart,
   Bar,
 } from "recharts";
+import { laporanService } from "@/services/laporanService";
+import type { LaporanHarianResponse } from "@/types/api";
 
 interface KPIData {
   totalRevenue: number;
@@ -70,174 +72,81 @@ interface SalesPersonData {
   sales: number;
 }
 
-interface ReportData {
-  id: string;
-  date: string;
-  division: string;
-  responsible: string;
-  key1: string;
-  key2: string;
-  status: "completed" | "pending" | "late";
-}
-
 export default function SuperAdminPage() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
+
+  // SEMUA STATE KOSONG - TIDAK ADA DATA DUMMY
+  const [kpiData, setKpiData] = useState<KPIData | null>(null);
+  const [salesTrendData, setSalesTrendData] = useState<SalesData[]>([]);
+  const [salesPersonData, setSalesPersonData] = useState<SalesPersonData[]>([]);
+  // Change this to use LaporanHarianResponse instead of ReportData
+  const [allReports, setAllReports] = useState<LaporanHarianResponse[]>([]);
+
+  // State untuk loading dan error
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
   const [selectedDivision, setSelectedDivision] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 5;
 
-  // KPI Data
-  const [kpiData] = useState<KPIData>({
-    totalRevenue: 2450000000, // 2.45 Miliar
-    productionEfficiency: 96.5,
-    cashBalance: 850000000, // 850 Juta
-    totalShipments: 1250,
-  });
-
-  // Sales trend data (7 days)
-  const [salesTrendData] = useState<SalesData[]>([
-    { date: "08/06", revenue: 320000000 },
-    { date: "09/06", revenue: 280000000 },
-    { date: "10/06", revenue: 380000000 },
-    { date: "11/06", revenue: 350000000 },
-    { date: "12/06", revenue: 420000000 },
-    { date: "13/06", revenue: 390000000 },
-    { date: "14/06", revenue: 410000000 },
-  ]);
-
-  // Top 5 sales performance
-  const [salesPersonData] = useState<SalesPersonData[]>([
-    { name: "Ahmad Rizki", sales: 85000000 },
-    { name: "Siti Nurhaliza", sales: 78000000 },
-    { name: "Budi Santoso", sales: 72000000 },
-    { name: "Maya Sari", sales: 68000000 },
-    { name: "Dedi Kurniawan", sales: 65000000 },
-  ]);
-
-  // All reports data
-  const [allReports] = useState<ReportData[]>([
-    {
-      id: "1",
-      date: "2025-06-14",
-      division: "Produksi",
-      responsible: "Admin Produksi",
-      key1: "950 kg",
-      key2: "95% Efisiensi",
-      status: "completed",
-    },
-    {
-      id: "2",
-      date: "2025-06-14",
-      division: "Keuangan",
-      responsible: "Admin Keuangan",
-      key1: "Rp 850M",
-      key2: "Rp 420M Pendapatan",
-      status: "completed",
-    },
-    {
-      id: "3",
-      date: "2025-06-14",
-      division: "Pemasaran",
-      responsible: "Admin Pemasaran",
-      key1: "125 Prospek",
-      key2: "85% Konversi",
-      status: "pending",
-    },
-    {
-      id: "4",
-      date: "2025-06-14",
-      division: "Distribusi & Gudang",
-      responsible: "Admin Gudang",
-      key1: "1250 Paket",
-      key2: "98% On-time",
-      status: "completed",
-    },
-    {
-      id: "5",
-      date: "2025-06-13",
-      division: "Produksi",
-      responsible: "Admin Produksi",
-      key1: "1020 kg",
-      key2: "102% Efisiensi",
-      status: "completed",
-    },
-    {
-      id: "6",
-      date: "2025-06-13",
-      division: "Keuangan",
-      responsible: "Admin Keuangan",
-      key1: "Rp 820M",
-      key2: "Rp 390M Pendapatan",
-      status: "completed",
-    },
-    {
-      id: "7",
-      date: "2025-06-13",
-      division: "Pemasaran",
-      responsible: "Admin Pemasaran",
-      key1: "110 Prospek",
-      key2: "78% Konversi",
-      status: "late",
-    },
-    {
-      id: "8",
-      date: "2025-06-13",
-      division: "Distribusi & Gudang",
-      responsible: "Admin Gudang",
-      key1: "1180 Paket",
-      key2: "96% On-time",
-      status: "completed",
-    },
-    {
-      id: "9",
-      date: "2025-06-12",
-      division: "Produksi",
-      responsible: "Admin Produksi",
-      key1: "980 kg",
-      key2: "98% Efisiensi",
-      status: "completed",
-    },
-    {
-      id: "10",
-      date: "2025-06-12",
-      division: "Keuangan",
-      responsible: "Admin Keuangan",
-      key1: "Rp 800M",
-      key2: "Rp 380M Pendapatan",
-      status: "completed",
-    },
-    {
-      id: "11",
-      date: "2025-06-12",
-      division: "Pemasaran",
-      responsible: "Admin Pemasaran",
-      key1: "95 Prospek",
-      key2: "82% Konversi",
-      status: "completed",
-    },
-    {
-      id: "12",
-      date: "2025-06-12",
-      division: "Distribusi & Gudang",
-      responsible: "Admin Gudang",
-      key1: "1320 Paket",
-      key2: "99% On-time",
-      status: "completed",
-    },
-  ]);
-
+  // useEffect UNTUK MENGAMBIL DATA DARI API
   useEffect(() => {
+    // Validasi user dan role
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "superadmin") {
+    console.log("🔍 Super Admin Page - Data localStorage:");
+    console.log("userName:", storedUserName);
+    console.log("userRole:", userRole);
+
+    if (!storedUserName || userRole !== "ROLE_SUPERADMIN") {
+      console.log("❌ Tidak ada access, redirect ke login");
+      console.log("Expected: ROLE_SUPERADMIN, Got:", userRole);
       router.push("/");
       return;
     }
 
+    console.log("✅ Validasi berhasil, lanjut fetch data");
     setUserName(storedUserName);
+
+    // Fungsi untuk mengambil semua data dari backend
+    const fetchAllData = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        // Ambil data laporan dari API menggunakan service baru
+        const reportsData: LaporanHarianResponse[] =
+          await laporanService.getAllLaporan();
+        setAllReports(reportsData);
+
+        // TODO: Implementasi endpoint untuk KPI dan Analytics
+        // Untuk sementara, KPI dan grafik akan kosong
+        // setKpiData(await kpiService.getKPI());
+        // setSalesTrendData(await analyticsService.getSalesTrend());
+        // setSalesPersonData(await analyticsService.getTopSales());
+
+        console.log(
+          "✅ Data laporan berhasil diambil:",
+          reportsData.length,
+          "laporan"
+        );
+      } catch (err: any) {
+        console.error("❌ Gagal mengambil data:", err);
+        setError(err.message || "Gagal mengambil data laporan");
+
+        // Jika token tidak valid atau tidak punya izin, arahkan ke login
+        if (err.message.includes("403") || err.message.includes("401")) {
+          router.push("/");
+        }
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchAllData();
   }, [router]);
 
   const handleLogout = () => {
@@ -248,13 +157,12 @@ export default function SuperAdminPage() {
   // Filter reports based on division and search term
   const filteredReports = allReports.filter((report) => {
     const matchesDivision =
-      selectedDivision === "all" || report.division === selectedDivision;
+      selectedDivision === "all" || report.divisi === selectedDivision;
     const matchesSearch =
       searchTerm === "" ||
-      report.division.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.responsible.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.key1.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.key2.toLowerCase().includes(searchTerm.toLowerCase());
+      report.divisi.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.submittedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.tanggalLaporan.includes(searchTerm);
 
     return matchesDivision && matchesSearch;
   });
@@ -284,18 +192,44 @@ export default function SuperAdminPage() {
     });
   };
 
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "completed":
-        return <Badge className="bg-green-500">Selesai</Badge>;
-      case "pending":
-        return <Badge className="bg-yellow-500">Pending</Badge>;
-      case "late":
-        return <Badge variant="destructive">Terlambat</Badge>;
-      default:
-        return <Badge variant="secondary">Unknown</Badge>;
+  // Helper function to get summary of rincian data
+  const getRincianSummary = (report: LaporanHarianResponse) => {
+    if (!report.rincian || report.rincian.length === 0) {
+      return { key1: "Tidak ada data", key2: "" };
     }
+
+    const categories = [...new Set(report.rincian.map((r) => r.kategoriUtama))];
+    const totalItems = report.rincian.length;
+
+    return {
+      key1: categories.slice(0, 2).join(", "),
+      key2: `${totalItems} item`,
+    };
   };
+
+  // Kondisi loading
+  if (isLoading) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-32 w-32 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-4 text-lg text-gray-600">Memuat data...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Kondisi error
+  if (error) {
+    return (
+      <div className="flex justify-center items-center h-screen">
+        <div className="text-center">
+          <p className="text-red-500 text-lg mb-4">{error}</p>
+          <Button onClick={() => window.location.reload()}>Coba Lagi</Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -328,150 +262,182 @@ export default function SuperAdminPage() {
       </nav>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* KPI Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-green-100 rounded-lg">
-                  <DollarSign className="h-6 w-6 text-green-600" />
+        {/* KPI Cards - HANYA TAMPIL JIKA ADA DATA */}
+        {kpiData && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <DollarSign className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Pendapatan Bersih
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(kpiData.totalRevenue)}
+                    </p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Total Pendapatan Bersih
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(kpiData.totalRevenue)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-blue-100 rounded-lg">
-                  <TrendingUp className="h-6 w-6 text-blue-600" />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <TrendingUp className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      Tingkat Efisiensi Produksi
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {kpiData.productionEfficiency}%
+                    </p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Tingkat Efisiensi Produksi
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {kpiData.productionEfficiency}%
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-purple-100 rounded-lg">
-                  <Package className="h-6 w-6 text-purple-600" />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-purple-100 rounded-lg">
+                    <Package className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      Saldo Akhir Kas
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {formatCurrency(kpiData.cashBalance)}
+                    </p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Saldo Akhir Kas
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {formatCurrency(kpiData.cashBalance)}
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
 
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center">
-                <div className="p-2 bg-orange-100 rounded-lg">
-                  <Truck className="h-6 w-6 text-orange-600" />
+            <Card>
+              <CardContent className="p-6">
+                <div className="flex items-center">
+                  <div className="p-2 bg-orange-100 rounded-lg">
+                    <Truck className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div className="ml-4">
+                    <p className="text-sm font-medium text-gray-600">
+                      Total Pengiriman
+                    </p>
+                    <p className="text-2xl font-bold text-gray-900">
+                      {kpiData.totalShipments.toLocaleString()} paket
+                    </p>
+                  </div>
                 </div>
-                <div className="ml-4">
-                  <p className="text-sm font-medium text-gray-600">
-                    Total Pengiriman
-                  </p>
-                  <p className="text-2xl font-bold text-gray-900">
-                    {kpiData.totalShipments.toLocaleString()} paket
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Charts - HANYA TAMPIL JIKA ADA DATA */}
+        {(salesTrendData.length > 0 || salesPersonData.length > 0) && (
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+            {/* Sales Trend Chart */}
+            {salesTrendData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Tren Penjualan 7 Hari Terakhir</CardTitle>
+                  <CardDescription>
+                    Pendapatan harian dalam Rupiah
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={salesTrendData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="date" />
+                      <YAxis
+                        tickFormatter={(value) =>
+                          `${(value / 1000000).toFixed(0)}M`
+                        }
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [
+                          formatCurrency(value),
+                          "Pendapatan",
+                        ]}
+                        labelFormatter={(label) => `Tanggal: ${label}`}
+                      />
+                      <Line
+                        type="monotone"
+                        dataKey="revenue"
+                        stroke="#2563eb"
+                        strokeWidth={2}
+                        dot={{ fill: "#2563eb" }}
+                      />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Sales Person Chart */}
+            {salesPersonData.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Performa Penjualan per Sales (Top 5)</CardTitle>
+                  <CardDescription>Penjualan dalam Rupiah</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <ResponsiveContainer width="100%" height={300}>
+                    <BarChart data={salesPersonData}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis
+                        dataKey="name"
+                        angle={-45}
+                        textAnchor="end"
+                        height={80}
+                        fontSize={12}
+                      />
+                      <YAxis
+                        tickFormatter={(value) =>
+                          `${(value / 1000000).toFixed(0)}M`
+                        }
+                      />
+                      <Tooltip
+                        formatter={(value: number) => [
+                          formatCurrency(value),
+                          "Penjualan",
+                        ]}
+                      />
+                      <Bar dataKey="sales" fill="#10b981" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        )}
+
+        {/* Pesan jika belum ada data KPI/Analytics */}
+        {!kpiData &&
+          salesTrendData.length === 0 &&
+          salesPersonData.length === 0 && (
+            <Card className="mb-8">
+              <CardContent className="p-8 text-center">
+                <div className="text-gray-500">
+                  <TrendingUp className="h-12 w-12 mx-auto mb-4 text-gray-300" />
+                  <h3 className="text-lg font-medium mb-2">
+                    Data KPI & Analytics Belum Tersedia
+                  </h3>
+                  <p className="text-sm">
+                    Endpoint untuk data KPI dan Analytics masih dalam
+                    pengembangan.
                   </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Charts */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-          <Card>
-            <CardHeader>
-              <CardTitle>Tren Penjualan 7 Hari Terakhir</CardTitle>
-              <CardDescription>Pendapatan harian dalam Rupiah</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={salesTrendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `${(value / 1000000).toFixed(0)}M`
-                    }
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [
-                      formatCurrency(value),
-                      "Pendapatan",
-                    ]}
-                    labelFormatter={(label) => `Tanggal: ${label}`}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="revenue"
-                    stroke="#2563eb"
-                    strokeWidth={2}
-                    dot={{ fill: "#2563eb" }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle>Performa Penjualan per Sales (Top 5)</CardTitle>
-              <CardDescription>Penjualan dalam Rupiah</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={salesPersonData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis
-                    dataKey="name"
-                    angle={-45}
-                    textAnchor="end"
-                    height={80}
-                    fontSize={12}
-                  />
-                  <YAxis
-                    tickFormatter={(value) =>
-                      `${(value / 1000000).toFixed(0)}M`
-                    }
-                  />
-                  <Tooltip
-                    formatter={(value: number) => [
-                      formatCurrency(value),
-                      "Penjualan",
-                    ]}
-                  />
-                  <Bar dataKey="sales" fill="#10b981" />
-                </BarChart>
-              </ResponsiveContainer>
-            </CardContent>
-          </Card>
-        </div>
+              </CardContent>
+            </Card>
+          )}
 
         {/* Reports Database */}
         <Card>
@@ -524,37 +490,55 @@ export default function SuperAdminPage() {
                     <TableHead>Tanggal</TableHead>
                     <TableHead>Divisi</TableHead>
                     <TableHead>Penanggung Jawab</TableHead>
-                    <TableHead>Data Kunci 1</TableHead>
-                    <TableHead>Data Kunci 2</TableHead>
+                    <TableHead>Kategori Utama</TableHead>
+                    <TableHead>Total Item</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead>Aksi</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {currentReports.map((report) => (
-                    <TableRow key={report.id}>
-                      <TableCell className="font-medium">
-                        {formatDate(report.date)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{report.division}</Badge>
-                      </TableCell>
-                      <TableCell>{report.responsible}</TableCell>
-                      <TableCell>{report.key1}</TableCell>
-                      <TableCell>{report.key2}</TableCell>
-                      <TableCell>{getStatusBadge(report.status)}</TableCell>
-                      <TableCell>
-                        <div className="flex space-x-2">
-                          <Button variant="outline" size="sm">
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button variant="outline" size="sm">
-                            <Printer className="h-4 w-4" />
-                          </Button>
-                        </div>
+                  {currentReports.length > 0 ? (
+                    currentReports.map((report) => {
+                      const summary = getRincianSummary(report);
+                      return (
+                        <TableRow key={report.laporanId}>
+                          <TableCell className="font-medium">
+                            {formatDate(report.tanggalLaporan)}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{report.divisi}</Badge>
+                          </TableCell>
+                          <TableCell>{report.submittedBy}</TableCell>
+                          <TableCell>{summary.key1}</TableCell>
+                          <TableCell>{summary.key2}</TableCell>
+                          <TableCell>
+                            <Badge className="bg-green-500">Selesai</Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex space-x-2">
+                              <Button variant="outline" size="sm">
+                                <Eye className="h-4 w-4" />
+                              </Button>
+                              <Button variant="outline" size="sm">
+                                <Printer className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
+                  ) : (
+                    <TableRow>
+                      <TableCell
+                        colSpan={7}
+                        className="text-center py-8 text-gray-500"
+                      >
+                        {allReports.length === 0
+                          ? "Belum ada laporan yang tersedia"
+                          : "Tidak ada laporan yang sesuai dengan filter"}
                       </TableCell>
                     </TableRow>
-                  ))}
+                  )}
                 </TableBody>
               </Table>
             </div>
@@ -599,7 +583,6 @@ export default function SuperAdminPage() {
                           variant={currentPage === page ? "default" : "outline"}
                           size="sm"
                           onClick={() => setCurrentPage(page)}
-                          className="w-8 h-8 p-0"
                         >
                           {page}
                         </Button>

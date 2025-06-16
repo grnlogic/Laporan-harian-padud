@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
@@ -17,6 +16,7 @@ import {
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { Building2, UserPlus } from "lucide-react";
 import Link from "next/link";
+import { authService } from "@/lib/api";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -37,78 +37,68 @@ export default function LoginPage() {
       return;
     }
 
-    // Simulate authentication
-    setTimeout(() => {
-      // Check registered users first
-      const registeredUsers = JSON.parse(
-        localStorage.getItem("registeredUsers") || "[]"
-      );
-      const registeredUser = registeredUsers.find(
-        (user: any) => user.username === username && user.password === password
-      );
+    try {
+      // Login menggunakan API backend
+      const response = await authService.login(username, password);
 
-      if (registeredUser) {
-        localStorage.setItem("userRole", "admin");
-        localStorage.setItem("userName", registeredUser.fullName);
-        localStorage.setItem("userDivision", registeredUser.division);
+      // DEBUG: Lihat apa yang diterima dari backend
+      console.log("🔍 Response dari backend:", response);
+      console.log("🔍 Role yang diterima:", response.role);
 
-        // Route to new dynamic pages based on division
-        switch (registeredUser.division) {
-          case "keuangan":
+      // Simpan token dan data user ke localStorage
+      localStorage.setItem("authToken", response.token);
+      localStorage.setItem("userRole", response.role);
+      localStorage.setItem("userName", response.fullName);
+      localStorage.setItem("userDivision", response.division);
+      localStorage.setItem("userId", response.userId);
+
+      // DEBUG: Cek apa yang disimpan di localStorage
+      console.log("💾 Data tersimpan di localStorage:");
+      console.log("authToken:", localStorage.getItem("authToken"));
+      console.log("userRole:", localStorage.getItem("userRole"));
+      console.log("userName:", localStorage.getItem("userName"));
+
+      // Routing berdasarkan role
+      console.log("🚀 Mulai routing...");
+      
+      if (response.role === "ROLE_SUPERADMIN") {
+        console.log("✅ Redirect ke super-admin");
+        router.push("/super-admin");
+      } else {
+        console.log("🔄 Role bukan SUPERADMIN, cek role lain...");
+        // Route berdasarkan role untuk admin biasa
+        switch (response.role) {
+          case "ROLE_KEUANGAN":
+            console.log("✅ Redirect ke admin/keuangan");
             router.push("/admin/keuangan");
             break;
-          case "produksi":
+          case "ROLE_PRODUKSI":
+            console.log("✅ Redirect ke admin/produksi");
             router.push("/admin/produksi");
             break;
-          case "pemasaran":
+          case "ROLE_PEMASARAN":
+            console.log("✅ Redirect ke admin/pemasaran");
             router.push("/admin/pemasaran");
             break;
-          case "gudang":
+          case "ROLE_GUDANG":
+            console.log("✅ Redirect ke admin/gudang");
             router.push("/admin/gudang");
             break;
-          case "hrd":
+          case "ROLE_HRD":
+            console.log("✅ Redirect ke admin/hrd");
             router.push("/admin/hrd");
             break;
           default:
+            console.log("⚠️ Role tidak dikenal, redirect ke default");
             router.push("/admin/keuangan");
         }
-      } else {
-        // Fallback to demo accounts
-        if (username === "superadmin" && password === "admin123") {
-          localStorage.setItem("userRole", "superadmin");
-          localStorage.setItem("userName", "Super Administrator");
-          router.push("/super-admin");
-        } else if (username === "produksi" && password === "prod123") {
-          localStorage.setItem("userRole", "admin");
-          localStorage.setItem("userName", "Admin Produksi");
-          localStorage.setItem("userDivision", "Produksi");
-          router.push("/admin/produksi");
-        } else if (username === "keuangan" && password === "keu123") {
-          localStorage.setItem("userRole", "admin");
-          localStorage.setItem("userName", "Admin Keuangan");
-          localStorage.setItem("userDivision", "Keuangan");
-          router.push("/admin/keuangan");
-        } else if (username === "pemasaran" && password === "market123") {
-          localStorage.setItem("userRole", "admin");
-          localStorage.setItem("userName", "Admin Pemasaran");
-          localStorage.setItem("userDivision", "Pemasaran");
-          router.push("/admin/pemasaran");
-        } else if (username === "gudang" && password === "gudang123") {
-          localStorage.setItem("userRole", "admin");
-          localStorage.setItem("userName", "Admin Gudang");
-          localStorage.setItem("userDivision", "Distribusi & Gudang");
-          router.push("/admin/gudang");
-        } else if (username === "hrd" && password === "hrd123") {
-          localStorage.setItem("userRole", "admin");
-          localStorage.setItem("userName", "Admin HRD");
-          localStorage.setItem("userDivision", "HRD");
-          router.push("/admin/hrd");
-        } else {
-          setError("Username atau password salah. Silakan coba lagi.");
-        }
       }
+    } catch (error) {
+      console.error("❌ Login error:", error);
+      setError("Username atau password salah. Silakan coba lagi.");
+    } finally {
       setIsLoading(false);
-    }, 1000);
+    }
   };
 
   return (
@@ -189,27 +179,17 @@ export default function LoginPage() {
               </p>
             </div>
 
-            {/* Demo Credentials */}
+            {/* Info untuk testing */}
             <div className="mt-6 p-4 bg-gray-50 rounded-lg">
               <p className="text-sm font-medium text-gray-700 mb-2">
-                Demo Credentials:
+                Info Penggunaan:
               </p>
               <div className="text-xs text-gray-600 space-y-1">
                 <p>
-                  <strong>Super Admin:</strong> superadmin / admin123
+                  • Gunakan akun yang sudah didaftarkan melalui endpoint register
                 </p>
-                <p>
-                  <strong>Keuangan:</strong> keuangan / keu123
-                </p>
-                <p>
-                  <strong>Produksi:</strong> produksi / prod123
-                </p>
-                <p>
-                  <strong>Pemasaran:</strong> pemasaran / market123
-                </p>
-                <p>
-                  <strong>HRD:</strong> hrd / hrd123
-                </p>
+                <p>• Atau daftar akun baru melalui halaman registrasi</p>
+                <p>• Sistem akan otomatis mengarahkan sesuai role dan divisi</p>
               </div>
             </div>
           </CardContent>
@@ -217,8 +197,5 @@ export default function LoginPage() {
       </div>
     </div>
   );
-}
-function loadSavedReports() {
-  throw new Error("Function not implemented.");
 }
 

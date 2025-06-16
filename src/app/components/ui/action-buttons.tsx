@@ -1,6 +1,6 @@
 "use client"
 
-import { Button } from "@/components/ui/button"
+import { Button } from "@/app/components/ui/button"
 import { Eye, Edit, Trash2, Share2 } from "lucide-react"
 import { PDFExport } from "./pdf-export"
 

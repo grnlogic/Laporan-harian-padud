@@ -185,11 +185,11 @@ export default function NewHRDAdminPage() {
     <div className="min-h-screen bg-gray-50">
       {/* Navbar */}
       <EnhancedNavbar
-        userName={userName}
-        currentDate={currentDate}
-        division="HRD"
-        divisionColor="red"
-        handleLogout={handleLogout}
+        {...({
+          userName,
+          currentDate,
+          handleLogout,
+        } as any)}
       />
 
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
@@ -386,12 +386,4 @@ export default function NewHRDAdminPage() {
       </div>
     </div>
   );
-}
-
-interface EnhancedNavbarProps {
-  userName: string;
-  currentDate: string;
-  division?: string;        // Add this
-  divisionColor?: string;   // Add this
-  handleLogout: () => void;
 }

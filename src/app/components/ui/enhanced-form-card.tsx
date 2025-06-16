@@ -2,9 +2,9 @@
 
 import type React from "react"
 
-import { Card, CardContent, CardHeader } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardHeader } from "@/app/components/ui/card"
+import { Button } from "@/app/components/ui/button"
+import { Badge } from "@/app/components/ui/badge"
 import { RefreshCw, Save, FileDown, Printer, Sparkles } from "lucide-react"
 
 interface EnhancedFormCardProps {

@@ -2,7 +2,7 @@
 
 import { jsPDF } from "jspdf"
 import "jspdf-autotable"
-import { Button } from "@/components/ui/button"
+import { Button } from "@/app/components/ui/button"
 import { FileDown, Printer } from "lucide-react"
 
 interface ReportData {

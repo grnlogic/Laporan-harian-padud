@@ -1,3 +1,5 @@
+@tailwind base;
+@tailwind components;
 @tailwind utilities;
 
 @layer base {
@@ -49,9 +51,17 @@
 
 @layer base {
   * {
-    @apply border-border;
+    @apply border-gray-200;
   }
   body {
-    @apply bg-background text-foreground;
+    @apply bg-white text-gray-900;
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+}
+
+/* Fallback untuk border jika CSS variables tidak terbaca */
+@layer utilities {
+  .border-border {
+    border-color: hsl(214.3 31.8% 91.4%);
   }
 }

@@ -2,8 +2,8 @@
 
 import type React from "react"
 
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table"
+import { Button } from "@/app/components/ui/button"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 
 interface Column {

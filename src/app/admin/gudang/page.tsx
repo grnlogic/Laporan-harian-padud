@@ -3,6 +3,8 @@
 import type React from "react";
 
 import { useState, useEffect } from "react";
+import { apiRequest } from "@/lib/api";
+import type { LaporanHarianResponse } from "@/types/api";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
 import { Save, FileDown, Printer, RefreshCw } from "lucide-react";
@@ -12,6 +14,7 @@ import { EnhancedNavbar } from "@/app/components/ui/enhanced-navbar";
 import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
+import { laporanService } from "@/services/laporanService";
 
 interface FormRow {
   id: string;
@@ -32,7 +35,7 @@ export default function NewWarehouseAdminPage() {
   const [currentDate, setCurrentDate] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
 
   const [formData, setFormData] = useState<WarehouseFormData>({
     initialRawMaterialStock: [],
@@ -45,7 +48,11 @@ export default function NewWarehouseAdminPage() {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "admin") {
+    // Fix: Check for either role format (with or without ROLE_ prefix)
+    if (
+      !storedUserName ||
+      (userRole !== "ROLE_GUDANG" && userRole !== "admin")
+    ) {
       router.push("/");
       return;
     }
@@ -62,15 +69,29 @@ export default function NewWarehouseAdminPage() {
     };
     setCurrentDate(today.toLocaleDateString("id-ID", options));
 
-    // Load saved reports
+    // Load saved reports from backend
     loadSavedReports();
   }, [router]);
 
-  const loadSavedReports = () => {
-    const reports = JSON.parse(
-      localStorage.getItem("warehouseReports") || "[]"
-    );
-    setSavedReports(reports);
+  const loadSavedReports = async () => {
+    try {
+      // Get reports from backend API - ubah dari getMy() ke getMyLaporan()
+      const reportsFromServer: LaporanHarianResponse[] =
+        await laporanService.getMyLaporan();
+
+      // Filter for warehouse division reports if needed
+      const warehouseReports = reportsFromServer.filter(
+        (report) =>
+          report.divisi === "ROLE_GUDANG" ||
+          report.divisi === "Distribusi & Gudang" ||
+          report.divisi === "GUDANG"
+      );
+      setSavedReports(warehouseReports);
+    } catch (err) {
+      console.error("Gagal memuat riwayat laporan:", err);
+      setMessage("Gagal memuat riwayat laporan dari server.");
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   const handleLogout = () => {
@@ -88,83 +109,138 @@ export default function NewWarehouseAdminPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setMessage("");
 
-    // Validate that at least one section has data
-    const hasData = Object.values(formData).some(
-      (section) => section.length > 0
-    );
+    // 1. Collect all details from form into one array
+    const semuaRincian = [
+      ...formData.initialRawMaterialStock.map((row) => ({
+        ...row,
+        kategoriUtama: "STOCK BAHAN BAKU",
+        kategoriSub: "AWAL",
+        satuan: "Kg",
+      })),
+      ...formData.rawMaterialUsage.map((row) => ({
+        ...row,
+        kategoriUtama: "PEMAKAIAN",
+        kategoriSub: undefined,
+        satuan: "Kg",
+      })),
+      ...formData.finalRawMaterialStock.map((row) => ({
+        ...row,
+        kategoriUtama: "STOCK BAHAN BAKU",
+        kategoriSub: "AKHIR",
+        satuan: "Kg",
+      })),
+      ...formData.warehouseCondition.map((row) => ({
+        ...row,
+        kategoriUtama: "KONDISI GUDANG",
+        kategoriSub: undefined,
+        satuan: "",
+      })),
+    ];
 
-    if (!hasData) {
+    if (semuaRincian.length === 0) {
       setMessage("Minimal satu bagian harus diisi.");
       setIsLoading(false);
       return;
     }
 
-    // Simulate saving
-    setTimeout(() => {
-      const reportData = {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split("T")[0],
-        division: "Distribusi & Gudang",
-        data: formData,
-        createdAt: new Date().toISOString(),
-        createdBy: userName,
+    // 2. Format data according to backend expectations
+    const payload = {
+      tanggalLaporan: new Date().toISOString().split("T")[0],
+      rincian: semuaRincian.map((item) => ({
+        kategoriUtama: item.kategoriUtama,
+        kategoriSub: item.kategoriSub || null,
+        keterangan: item.description,
+        nilaiKuantitas: item.amount || null,
+        satuan: item.satuan,
+      })),
+    };
+
+    try {
+      // 3. Send data to backend using laporanService - ubah dari create() ke createLaporan()
+      await laporanService.createLaporan(payload);
+
+      setMessage("Laporan gudang berhasil disimpan ke server!");
+      loadSavedReports(); // Reload history from server
+      clearForm(); // Clear form
+    } catch (err) {
+      console.error("Gagal menyimpan laporan:", err);
+      setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setMessage(""), 3000);
+    }
+  };
+
+  const handleViewReport = (report: LaporanHarianResponse) => {
+    // Convert backend data back to form format
+    const convertedData: WarehouseFormData = {
+      initialRawMaterialStock: [],
+      rawMaterialUsage: [],
+      finalRawMaterialStock: [],
+      warehouseCondition: [],
+    };
+
+    // Process rincian data back to form structure
+    report.rincian?.forEach((item, index) => {
+      const formRow: FormRow = {
+        id: `${index}`,
+        description: item.keterangan || "",
+        amount: item.nilaiKuantitas || 0,
       };
 
-      const existingReports = JSON.parse(
-        localStorage.getItem("warehouseReports") || "[]"
-      );
-      existingReports.unshift(reportData);
-      localStorage.setItem("warehouseReports", JSON.stringify(existingReports));
+      if (
+        item.kategoriUtama === "STOCK BAHAN BAKU" &&
+        item.kategoriSub === "AWAL"
+      ) {
+        convertedData.initialRawMaterialStock.push(formRow);
+      } else if (item.kategoriUtama === "PEMAKAIAN") {
+        convertedData.rawMaterialUsage.push(formRow);
+      } else if (
+        item.kategoriUtama === "STOCK BAHAN BAKU" &&
+        item.kategoriSub === "AKHIR"
+      ) {
+        convertedData.finalRawMaterialStock.push(formRow);
+      } else if (item.kategoriUtama === "KONDISI GUDANG") {
+        convertedData.warehouseCondition.push(formRow);
+      }
+    });
 
-      setMessage("Laporan gudang berhasil disimpan!");
-      loadSavedReports();
-
-      // Reset form
-      setFormData({
-        initialRawMaterialStock: [],
-        rawMaterialUsage: [],
-        finalRawMaterialStock: [],
-        warehouseCondition: [],
-      });
-
-      setTimeout(() => setMessage(""), 3000);
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  const handleViewReport = (report: any) => {
-    setFormData(report.data);
+    setFormData(convertedData);
     setMessage(
-      `Menampilkan laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Menampilkan laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleEditReport = (report: any) => {
-    setFormData(report.data);
+  const handleEditReport = (report: LaporanHarianResponse) => {
+    // Same logic as handleViewReport for editing
+    handleViewReport(report);
     setMessage(
-      `Mode edit: Laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Mode edit: Laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleDeleteReport = (report: any) => {
-    if (confirm("Apakah Anda yakin ingin menghapus laporan ini?")) {
-      const existingReports = JSON.parse(
-        localStorage.getItem("warehouseReports") || "[]"
-      );
-      const updatedReports = existingReports.filter(
-        (r: any) => r.id !== report.id
-      );
-      localStorage.setItem("warehouseReports", JSON.stringify(updatedReports));
-      loadSavedReports();
-      setMessage("Laporan berhasil dihapus!");
-      setTimeout(() => setMessage(""), 3000);
+  const handleDeleteReport = async (report: LaporanHarianResponse) => {
+    if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
+      try {
+        // Ubah dari delete() ke deleteLaporan()
+        await laporanService.deleteLaporan(report.laporanId);
+
+        setMessage("Laporan berhasil dihapus dari server!");
+        loadSavedReports(); // Reload data from server to update list
+      } catch (err) {
+        console.error("Gagal menghapus laporan:", err);
+        setMessage("Gagal menghapus laporan dari server.");
+      } finally {
+        setTimeout(() => setMessage(""), 3000);
+      }
     }
   };
 

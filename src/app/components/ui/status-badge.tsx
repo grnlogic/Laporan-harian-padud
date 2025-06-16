@@ -1,6 +1,6 @@
 "use client"
 
-import { Badge } from "@/components/ui/badge"
+import { Badge } from "@/app/components/ui/badge"
 import { CheckCircle, Clock, AlertTriangle, XCircle } from "lucide-react"
 
 interface StatusBadgeProps {
