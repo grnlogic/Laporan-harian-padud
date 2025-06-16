@@ -15,6 +15,8 @@ import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
 import { laporanService } from "@/services/laporanService";
+import { pdfService } from "@/services/pdfService";
+import { printService } from "@/services/printService";
 
 interface FormRow {
   id: string;
@@ -44,15 +46,16 @@ export default function NewWarehouseAdminPage() {
     warehouseCondition: [],
   });
 
+  // Define timeout constants to ensure number type
+  const MESSAGE_TIMEOUT = 3000;
+  const CLEAR_FORM_TIMEOUT = 2000;
+
   useEffect(() => {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    // Fix: Check for either role format (with or without ROLE_ prefix)
-    if (
-      !storedUserName ||
-      (userRole !== "ROLE_GUDANG" && userRole !== "admin")
-    ) {
+    // Fix: Accept both ROLE_GUDANG and ADMIN
+    if (!storedUserName || (userRole !== "ADMIN" && userRole !== "ROLE_GUDANG")) {
       router.push("/");
       return;
     }
@@ -75,22 +78,34 @@ export default function NewWarehouseAdminPage() {
 
   const loadSavedReports = async () => {
     try {
-      // Get reports from backend API - ubah dari getMy() ke getMyLaporan()
+      // Get reports from backend API
       const reportsFromServer: LaporanHarianResponse[] =
         await laporanService.getMyLaporan();
 
-      // Filter for warehouse division reports if needed
-      const warehouseReports = reportsFromServer.filter(
-        (report) =>
-          report.divisi === "ROLE_GUDANG" ||
-          report.divisi === "Distribusi & Gudang" ||
-          report.divisi === "GUDANG"
-      );
+      // Filter for warehouse division reports
+      const warehouseReports = reportsFromServer
+        .filter(
+          (report) =>
+            report.divisi === "ROLE_GUDANG" ||
+            report.divisi === "Distribusi & Gudang" ||
+            report.divisi === "GUDANG" ||
+            report.divisi === "ADMIN"
+        )
+        .map((report) => ({
+          ...report,
+          // Pastikan laporanId tetap sebagai string untuk kompatibilitas dengan interface
+          laporanId: report.laporanId
+            ? String(report.laporanId)
+            : String((report as any).id || Date.now()),
+          // Fix: gunakan namaUser bukan userName
+          namaUser: report.namaUser || userName || "Admin",
+        }));
+
       setSavedReports(warehouseReports);
     } catch (err) {
       console.error("Gagal memuat riwayat laporan:", err);
       setMessage("Gagal memuat riwayat laporan dari server.");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -169,7 +184,7 @@ export default function NewWarehouseAdminPage() {
       setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -185,7 +200,7 @@ export default function NewWarehouseAdminPage() {
     // Process rincian data back to form structure
     report.rincian?.forEach((item, index) => {
       const formRow: FormRow = {
-        id: `${index}`,
+        id: index.toString(), // Fix: convert index to string
         description: item.keterangan || "",
         amount: item.nilaiKuantitas || 0,
       };
@@ -213,7 +228,7 @@ export default function NewWarehouseAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleEditReport = (report: LaporanHarianResponse) => {
@@ -224,14 +239,21 @@ export default function NewWarehouseAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleDeleteReport = async (report: LaporanHarianResponse) => {
     if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
       try {
+        // Convert string to number for API call
+        const reportId = parseInt(report.laporanId, 10);
+
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+
         // Ubah dari delete() ke deleteLaporan()
-        await laporanService.deleteLaporan(report.laporanId);
+        await laporanService.deleteLaporan(reportId);
 
         setMessage("Laporan berhasil dihapus dari server!");
         loadSavedReports(); // Reload data from server to update list
@@ -239,7 +261,7 @@ export default function NewWarehouseAdminPage() {
         console.error("Gagal menghapus laporan:", err);
         setMessage("Gagal menghapus laporan dari server.");
       } finally {
-        setTimeout(() => setMessage(""), 3000);
+        setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
       }
     }
   };
@@ -252,7 +274,29 @@ export default function NewWarehouseAdminPage() {
       warehouseCondition: [],
     });
     setMessage("Form telah dikosongkan");
-    setTimeout(() => setMessage(""), 2000);
+    setTimeout(() => setMessage(""), CLEAR_FORM_TIMEOUT);
+  };
+
+  const handleExportPDF = () => {
+    pdfService.exportToPDF({
+      division: "Gudang",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handlePrint = () => {
+    printService.printReport({
+      division: "Gudang",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handleExportReportPDF = (report: LaporanHarianResponse) => {
+    pdfService.exportReportToPDF(report);
   };
 
   return (
@@ -266,11 +310,11 @@ export default function NewWarehouseAdminPage() {
         divisionColor="purple"
       />
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-8 py-4 lg:py-6">
         {/* Main Layout: Left Panel (Form) + Right Panel (Preview) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
           {/* Left Panel - Form Editor */}
-          <div className="space-y-6">
+          <div className="space-y-4 lg:space-y-6">
             <EnhancedFormCard
               title="Editor Laporan Gudang"
               onClear={clearForm}
@@ -279,8 +323,8 @@ export default function NewWarehouseAdminPage() {
               divisionColor="purple"
             >
               {/* A. STOCK BAHAN BAKU AWAL */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
                   A. STOCK BAHAN BAKU AWAL
                 </h3>
 
@@ -299,8 +343,8 @@ export default function NewWarehouseAdminPage() {
               </div>
 
               {/* B. PEMAKAIAN */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
                   B. PEMAKAIAN
                 </h3>
 
@@ -319,8 +363,8 @@ export default function NewWarehouseAdminPage() {
               </div>
 
               {/* C. STOCK BAHAN BAKU AKHIR */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
                   C. STOCK BAHAN BAKU AKHIR
                 </h3>
 
@@ -339,8 +383,8 @@ export default function NewWarehouseAdminPage() {
               </div>
 
               {/* D. KONDISI GUDANG */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
                   D. KONDISI GUDANG
                 </h3>
 
@@ -364,6 +408,8 @@ export default function NewWarehouseAdminPage() {
                   className={
                     message.includes("berhasil")
                       ? "border-green-200 bg-green-50"
+                      : message.includes("Gagal") || message.includes("gagal")
+                      ? "border-red-200 bg-red-50"
                       : "border-blue-200 bg-blue-50"
                   }
                 >
@@ -371,6 +417,8 @@ export default function NewWarehouseAdminPage() {
                     className={
                       message.includes("berhasil")
                         ? "text-green-800"
+                        : message.includes("Gagal") || message.includes("gagal")
+                        ? "text-red-800"
                         : "text-blue-800"
                     }
                   >
@@ -380,25 +428,38 @@ export default function NewWarehouseAdminPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-3 pt-4 border-t">
+              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
                   size="lg"
                   disabled={isLoading}
                 >
-                  <Save className="h-5 w-5 mr-2" />
+                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                   {isLoading ? "Menyimpan..." : "Simpan Laporan"}
                 </Button>
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="outline" size="lg">
-                    <FileDown className="h-5 w-5 mr-2" />
-                    Export PDF
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
+                    <span className="hidden sm:inline">Export PDF</span>
+                    <span className="sm:hidden">PDF</span>
                   </Button>
 
-                  <Button type="button" variant="outline" size="lg">
-                    <Printer className="h-5 w-5 mr-2" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                     Print
                   </Button>
                 </div>
@@ -407,13 +468,13 @@ export default function NewWarehouseAdminPage() {
           </div>
 
           {/* Right Panel - Document Preview */}
-          <div className="lg:sticky lg:top-6">
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
+          <div className="xl:sticky xl:top-6 xl:self-start">
+            <div className="bg-white rounded-lg shadow-sm border p-3 lg:p-4 mb-4 max-h-96 xl:max-h-[calc(100vh-8rem)] overflow-y-auto">
+              <h2 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">
                 Preview Dokumen
               </h2>
               <DocumentPreview
-                division="Distribusi & Gudang"
+                division="Gudang"
                 date={new Date().toISOString()}
                 data={formData}
               />
@@ -422,14 +483,15 @@ export default function NewWarehouseAdminPage() {
         </div>
 
         {/* Bottom Panel - Report History */}
-        <ReportHistory
-          reports={savedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDelete={handleDeleteReport}
-          onExport={(report) => console.log("Export", report)}
-          className="mt-6"
-        />
+        <div className="mt-4 lg:mt-6">
+          <ReportHistory
+            reports={savedReports}
+            onView={handleViewReport}
+            onEdit={handleEditReport}
+            onDelete={handleDeleteReport}
+            onExport={handleExportReportPDF}
+          />
+        </div>
       </div>
     </div>
   );

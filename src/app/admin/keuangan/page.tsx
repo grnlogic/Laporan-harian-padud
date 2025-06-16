@@ -12,6 +12,8 @@ import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
 import { laporanService } from "@/services/laporanService";
+import { pdfService } from "@/services/pdfService";
+import { printService } from "@/services/printService";
 import { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
@@ -60,11 +62,16 @@ export default function NewFinanceAdminPage() {
     modalFinalBalance: [],
   });
 
+  // Define timeout constants to ensure number type
+  const MESSAGE_TIMEOUT = 3000;
+  const CLEAR_FORM_TIMEOUT = 2000;
+
   useEffect(() => {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "ROLE_KEUANGAN") {
+    // Fix: Accept both ROLE_KEUANGAN and ADMIN
+    if (!storedUserName || (userRole !== "ADMIN" && userRole !== "ROLE_KEUANGAN")) {
       router.push("/");
       return;
     }
@@ -89,15 +96,27 @@ export default function NewFinanceAdminPage() {
     try {
       const reports = await laporanService.getMyLaporan();
       // Filter hanya laporan keuangan
-      const financeReports = reports.filter(
-        (report) =>
-          report.divisi === "ROLE_KEUANGAN" || report.divisi === "Keuangan"
-      );
+      const financeReports = reports
+        .filter(
+          (report) =>
+            report.divisi === "ROLE_KEUANGAN" ||
+            report.divisi === "Keuangan" ||
+            report.divisi === "ADMIN"
+        )
+        .map((report) => ({
+          ...report,
+          // Pastikan laporanId tetap sebagai string untuk kompatibilitas dengan interface
+          laporanId: report.laporanId
+            ? String(report.laporanId)
+            : String((report as any).id || Date.now()),
+          // Fix: gunakan namaUser bukan userName
+          namaUser: report.namaUser || userName || "Admin",
+        }));
       setSavedReports(financeReports);
     } catch (err) {
       console.error("Gagal memuat riwayat laporan:", err);
       setMessage("Gagal memuat riwayat laporan dari server.");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -218,8 +237,14 @@ export default function NewFinanceAdminPage() {
 
     try {
       if (editingReport) {
-        // Update existing report
-        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        // Convert string to number for API call
+        const reportId = parseInt(editingReport.laporanId, 10);
+
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+
+        await laporanService.updateLaporan(reportId, payload);
         setMessage("Laporan keuangan berhasil diperbarui!");
         setEditingReport(null);
       } else {
@@ -235,7 +260,7 @@ export default function NewFinanceAdminPage() {
       setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -258,7 +283,7 @@ export default function NewFinanceAdminPage() {
 
     report.rincian.forEach((item) => {
       const formRow: FormRow = {
-        id: Date.now().toString() + Math.random(),
+        id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
         description: item.keterangan,
         amount: item.nilaiKuantitas || 0,
       };
@@ -305,7 +330,7 @@ export default function NewFinanceAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleEditReport = (report: LaporanHarianResponse) => {
@@ -317,20 +342,27 @@ export default function NewFinanceAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleDeleteReport = async (report: LaporanHarianResponse) => {
     if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
       try {
-        await laporanService.deleteLaporan(report.laporanId);
+        // Convert string to number for API call
+        const reportId = parseInt(report.laporanId, 10);
+
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+
+        await laporanService.deleteLaporan(reportId);
         setMessage("Laporan berhasil dihapus dari server!");
         loadSavedReports();
-        setTimeout(() => setMessage(""), 3000);
       } catch (err) {
         console.error("Gagal menghapus laporan:", err);
         setMessage("Gagal menghapus laporan dari server.");
-        setTimeout(() => setMessage(""), 3000);
+      } finally {
+        setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
       }
     }
   };
@@ -352,7 +384,29 @@ export default function NewFinanceAdminPage() {
     });
     setEditingReport(null);
     setMessage("Form telah dikosongkan");
-    setTimeout(() => setMessage(""), 2000);
+    setTimeout(() => setMessage(""), CLEAR_FORM_TIMEOUT);
+  };
+
+  const handleExportPDF = () => {
+    pdfService.exportToPDF({
+      division: "Keuangan",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handlePrint = () => {
+    printService.printReport({
+      division: "Keuangan",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handleExportReportPDF = (report: LaporanHarianResponse) => {
+    pdfService.exportReportToPDF(report);
   };
 
   return (
@@ -366,11 +420,11 @@ export default function NewFinanceAdminPage() {
         divisionColor="blue"
       />
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-8 py-4 lg:py-6">
         {/* Main Layout: Left Panel (Form) + Right Panel (Preview) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
           {/* Left Panel - Form Editor */}
-          <div className="space-y-6">
+          <div className="space-y-4 lg:space-y-6">
             <EnhancedFormCard
               title={
                 editingReport
@@ -384,7 +438,7 @@ export default function NewFinanceAdminPage() {
             >
               {editingReport && (
                 <Alert className="border-orange-200 bg-orange-50 mb-4">
-                  <AlertDescription className="text-orange-800">
+                  <AlertDescription className="text-orange-800 text-sm">
                     Sedang mengedit laporan tanggal{" "}
                     {new Date(editingReport.tanggalLaporan).toLocaleDateString(
                       "id-ID"
@@ -394,8 +448,8 @@ export default function NewFinanceAdminPage() {
               )}
 
               {/* A. KAS */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-blue-600 border-b border-blue-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-blue-600 border-b border-blue-200 pb-2">
                   A. KAS
                 </h3>
 
@@ -430,8 +484,8 @@ export default function NewFinanceAdminPage() {
               </div>
 
               {/* B. PIUTANG */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   B. PIUTANG
                 </h3>
 
@@ -468,8 +522,8 @@ export default function NewFinanceAdminPage() {
               </div>
 
               {/* C. HUTANG */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-red-600 border-b border-red-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-red-600 border-b border-red-200 pb-2">
                   C. HUTANG
                 </h3>
 
@@ -504,8 +558,8 @@ export default function NewFinanceAdminPage() {
               </div>
 
               {/* D. MODAL */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-purple-600 border-b border-purple-200 pb-2">
                   D. MODAL
                 </h3>
 
@@ -565,14 +619,14 @@ export default function NewFinanceAdminPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-3 pt-4 border-t">
+              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
                   size="lg"
                   disabled={isLoading}
                 >
-                  <Save className="h-5 w-5 mr-2" />
+                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                   {isLoading
                     ? "Menyimpan..."
                     : editingReport
@@ -585,20 +639,34 @@ export default function NewFinanceAdminPage() {
                     type="button"
                     variant="outline"
                     size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
                     onClick={clearForm}
                   >
                     Batal Edit
                   </Button>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="outline" size="lg">
-                    <FileDown className="h-5 w-5 mr-2" />
-                    Export PDF
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
+                    <span className="hidden sm:inline">Export PDF</span>
+                    <span className="sm:hidden">PDF</span>
                   </Button>
 
-                  <Button type="button" variant="outline" size="lg">
-                    <Printer className="h-5 w-5 mr-2" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                     Print
                   </Button>
                 </div>
@@ -607,13 +675,13 @@ export default function NewFinanceAdminPage() {
           </div>
 
           {/* Right Panel - Document Preview */}
-          <div className="lg:sticky lg:top-6">
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
+          <div className="xl:sticky xl:top-6 xl:self-start">
+            <div className="bg-white rounded-lg shadow-sm border p-3 lg:p-4 mb-4 max-h-96 xl:max-h-[calc(100vh-8rem)] overflow-y-auto">
+              <h2 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">
                 Preview Dokumen
               </h2>
               <DocumentPreview
-                division="Keuangan & Administrasi"
+                division="Keuangan"
                 date={new Date().toISOString()}
                 data={formData}
               />
@@ -622,14 +690,15 @@ export default function NewFinanceAdminPage() {
         </div>
 
         {/* Bottom Panel - Report History */}
-        <ReportHistory
-          reports={savedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDelete={handleDeleteReport}
-          onExport={(report) => console.log("Export", report)}
-          className="mt-6"
-        />
+        <div className="mt-4 lg:mt-6">
+          <ReportHistory
+            reports={savedReports}
+            onView={handleViewReport}
+            onEdit={handleEditReport}
+            onDelete={handleDeleteReport}
+            onExport={handleExportReportPDF}
+          />
+        </div>
       </div>
     </div>
   );

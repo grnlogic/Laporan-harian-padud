@@ -1,57 +1,93 @@
-export interface LaporanHarianResponse {
-  laporanId: number;
-  submittedBy: string;
-  divisi: string;
-  tanggalLaporan: string;
-  rincian: RincianData[];
+// API Response Types
+export interface ApiResponse<T = any> {
+  success: boolean;
+  message: string;
+  data?: T;
+  error?: string;
+}
+
+// User Types
+export interface LoginRequest {
+  username: string;
+  password: string;
+}
+
+export interface LoginResponse {
+  token: string;
+  user: {
+    id: string;
+    username: string;
+    role: string;
+    name: string;
+  };
+}
+
+export interface User {
+  id: string;
+  username: string;
+  role: string;
+  name: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+// Laporan Harian Types
+export interface RincianLaporan {
+  rincianId?: string;
+  kategoriUtama: string;
+  kategoriSub?: string | null;
+  keterangan: string;
+  nilaiKuantitas?: number | null;
+  satuan?: string;
   createdAt?: string;
   updatedAt?: string;
 }
 
 export interface LaporanHarianRequest {
   tanggalLaporan: string;
-  rincian: RincianRequest[];
+  rincian: {
+    kategoriUtama: string;
+    kategoriSub?: string | null;
+    keterangan: string;
+    nilaiKuantitas?: number | null;
+    satuan?: string;
+  }[];
 }
 
-export interface RincianData {
-  rincianId?: number;
-  kategoriUtama: string;
-  kategoriSub?: string;
-  keterangan: string;
-  nilaiKuantitas?: number;
-  satuan?: string;
+export interface LaporanHarianResponse {
+  laporanId: string;
+  tanggalLaporan: string;
+  divisi: string;
+  namaUser: string;
+  submittedBy?: string; // Add this for super admin compatibility
+  rincian: RincianLaporan[];
+  createdAt?: string;
+  updatedAt?: string;
 }
 
-export interface RincianRequest {
-  kategoriUtama: string;
-  kategoriSub?: string | null;
-  keterangan: string;
-  nilaiKuantitas?: number | null;
-  satuan?: string;
+// Generic Types
+export interface PaginationParams {
+  page?: number;
+  limit?: number;
+  sortBy?: string;
+  sortOrder?: "asc" | "desc";
 }
 
-// Legacy type for compatibility (if needed)
-export interface LaporanData {
-  id: string;
-  date: string;
-  division: string;
-  responsible: string;
-  key1: string;
-  key2: string;
-  status: "completed" | "pending" | "late";
+export interface PaginatedResponse<T> {
+  data: T[];
+  pagination: {
+    page: number;
+    limit: number;
+    total: number;
+    totalPages: number;
+  };
 }
 
-// Auth response types
-export interface LoginResponse {
-  token: string;
-  role: string;
-  fullName: string;
-  division: string;
-  userId: string;
-}
-
-export interface RegisterResponse {
+// Error Types
+export interface ApiError {
+  code: string;
   message: string;
+  details?: any;
 }
 
 // Tambahan untuk Keuangan

@@ -12,6 +12,8 @@ import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
 import { laporanService } from "@/services/laporanService";
+import { pdfService } from "@/services/pdfService";
+import { printService } from "@/services/printService";
 import type { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
@@ -35,7 +37,8 @@ export default function NewProductionAdminPage() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
-  const [editingReport, setEditingReport] = useState<LaporanHarianResponse | null>(null);
+  const [editingReport, setEditingReport] =
+    useState<LaporanHarianResponse | null>(null);
 
   const [formData, setFormData] = useState<ProductionFormData>({
     actualProduction: [],
@@ -49,8 +52,8 @@ export default function NewProductionAdminPage() {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    // Perbaiki validasi role untuk produksi
-    if (!storedUserName || userRole !== "ROLE_PRODUKSI") {
+    // Fix: Accept both ROLE_PRODUKSI and ADMIN
+    if (!storedUserName || (userRole !== "ADMIN" && userRole !== "ROLE_PRODUKSI")) {
       router.push("/");
       return;
     }
@@ -71,19 +74,44 @@ export default function NewProductionAdminPage() {
     loadSavedReports();
   }, [router]);
 
+  // Define timeout constants to ensure number type
+  const MESSAGE_TIMEOUT = 3000;
+  const CLEAR_FORM_TIMEOUT = 2000;
+
   const loadSavedReports = async () => {
     try {
       const reports = await laporanService.getMyLaporan();
-      // Filter hanya laporan produksi
-      const productionReports = reports.filter(
-        (report) =>
-          report.divisi === "ROLE_PRODUKSI" || report.divisi === "Produksi"
-      );
-      setSavedReports(productionReports);
+
+      // Validasi dan transformasi data jika perlu
+      const validatedReports = reports
+        .filter((report) => report && typeof report === "object")
+        .map((report) => ({
+          ...report,
+          // Pastikan tanggal dalam format yang benar
+          tanggalLaporan:
+            report.tanggalLaporan || new Date().toISOString().split("T")[0],
+          // Pastikan rincian adalah array
+          rincian: Array.isArray(report.rincian) ? report.rincian : [],
+          // Pastikan laporanId tetap sebagai string untuk kompatibilitas dengan interface
+          laporanId: report.laporanId 
+            ? String(report.laporanId) 
+            : String((report as any).id || Date.now()),
+          // Fix: gunakan namaUser bukan userName
+          namaUser: report.namaUser || userName || "Admin",
+        }))
+        .filter(
+          (report) =>
+            // Filter untuk divisi produksi atau admin
+            report.divisi === "ROLE_PRODUKSI" ||
+            report.divisi === "Produksi" ||
+            report.divisi === "ADMIN"
+        );
+
+      setSavedReports(validatedReports);
     } catch (err) {
       console.error("Gagal memuat riwayat laporan:", err);
       setMessage("Gagal memuat riwayat laporan dari server.");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -166,8 +194,14 @@ export default function NewProductionAdminPage() {
 
     try {
       if (editingReport) {
-        // Perbarui laporan yang sudah ada
-        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        // Perbarui laporan yang sudah ada - Convert string to number for API call
+        const reportId = parseInt(editingReport.laporanId, 10);
+        
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+        
+        await laporanService.updateLaporan(reportId, payload);
         setMessage("Laporan produksi berhasil diperbarui!");
         setEditingReport(null);
       } else {
@@ -183,7 +217,7 @@ export default function NewProductionAdminPage() {
       setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -199,7 +233,7 @@ export default function NewProductionAdminPage() {
 
     report.rincian.forEach((item) => {
       const formRow: FormRow = {
-        id: Date.now().toString() + Math.random(),
+        id: (Date.now() + Math.random()).toString(),
         description: item.keterangan,
         amount: item.nilaiKuantitas || 0,
       };
@@ -224,7 +258,7 @@ export default function NewProductionAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleEditReport = (report: LaporanHarianResponse) => {
@@ -236,20 +270,27 @@ export default function NewProductionAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleDeleteReport = async (report: LaporanHarianResponse) => {
     if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
       try {
-        await laporanService.deleteLaporan(report.laporanId);
+        // Convert string to number for API call
+        const reportId = parseInt(report.laporanId, 10);
+        
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+        
+        await laporanService.deleteLaporan(reportId);
         setMessage("Laporan berhasil dihapus dari server!");
         loadSavedReports(); // Muat ulang data dari server untuk memperbarui daftar
       } catch (err) {
         console.error("Gagal menghapus laporan:", err);
         setMessage("Gagal menghapus laporan dari server.");
       } finally {
-        setTimeout(() => setMessage(""), 3000);
+        setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
       }
     }
   };
@@ -264,8 +305,39 @@ export default function NewProductionAdminPage() {
     });
     setEditingReport(null);
     setMessage("Form telah dikosongkan");
-    setTimeout(() => setMessage(""), 2000);
+    setTimeout(() => setMessage(""), CLEAR_FORM_TIMEOUT);
   };
+
+  const handleExportPDF = () => {
+    pdfService.exportToPDF({
+      division: "Produksi",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handlePrint = () => {
+    printService.printReport({
+      division: "Produksi",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handleExportReportPDF = (report: LaporanHarianResponse) => {
+    pdfService.exportReportToPDF(report);
+  };
+
+  // Tambahkan validasi sebelum mengirim ke ReportHistory
+  const validReports = savedReports.filter(
+    (report) =>
+      report &&
+      report.laporanId &&
+      report.tanggalLaporan &&
+      Array.isArray(report.rincian)
+  );
 
   return (
     <div className="min-h-screen bg-gray-50">
@@ -414,14 +486,14 @@ export default function NewProductionAdminPage() {
               )}
 
               {/* Tombol Aksi */}
-              <div className="flex flex-col gap-3 pt-4 border-t">
+              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
                   size="lg"
                   disabled={isLoading}
                 >
-                  <Save className="h-5 w-5 mr-2" />
+                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                   {isLoading
                     ? "Menyimpan..."
                     : editingReport
@@ -434,20 +506,34 @@ export default function NewProductionAdminPage() {
                     type="button"
                     variant="outline"
                     size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
                     onClick={clearForm}
                   >
                     Batal Edit
                   </Button>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="outline" size="lg">
-                    <FileDown className="h-5 w-5 mr-2" />
-                    Export PDF
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
+                    <span className="hidden sm:inline">Export PDF</span>
+                    <span className="sm:hidden">PDF</span>
                   </Button>
 
-                  <Button type="button" variant="outline" size="lg">
-                    <Printer className="h-5 w-5 mr-2" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                     Print
                   </Button>
                 </div>
@@ -456,8 +542,8 @@ export default function NewProductionAdminPage() {
           </div>
 
           {/* Panel Kanan - Preview Dokumen */}
-          <div className="lg:sticky lg:top-6">
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
+          <div className="lg:sticky lg:top-6 lg:self-start">
+            <div className="bg-white rounded-lg shadow-sm border p-4 mb-4 max-h-[calc(100vh-8rem)] overflow-y-auto">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
                 Preview Dokumen
               </h2>
@@ -471,14 +557,15 @@ export default function NewProductionAdminPage() {
         </div>
 
         {/* Panel Bawah - Riwayat Laporan */}
-        <ReportHistory
-          reports={savedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDelete={handleDeleteReport}
-          onExport={(report) => console.log("Export", report)}
-          className="mt-6"
-        />
+        <div className="mt-4 lg:mt-6">
+          <ReportHistory
+            reports={validReports}
+            onView={handleViewReport}
+            onEdit={handleEditReport}
+            onDelete={handleDeleteReport}
+            onExport={handleExportReportPDF}
+          />
+        </div>
       </div>
     </div>
   );

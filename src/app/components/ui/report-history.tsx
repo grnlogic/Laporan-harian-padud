@@ -99,13 +99,23 @@ export function ReportHistory({ reports, onView, onEdit, onDelete, onExport, cla
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {reports.map((report) => (
-                    <TableRow key={report.id} className="hover:bg-gray-50">
-                      <TableCell className="font-medium">{formatDate(report.date)}</TableCell>
-                      <TableCell className="max-w-xs">
-                        <div className="truncate text-sm text-gray-600">{getReportSummary(report)}</div>
+                  {reports.map((report, index) => (
+                    <TableRow key={report.laporanId || report.id || index} className="hover:bg-gray-50">
+                      <TableCell className="font-medium">
+                        {report.tanggalLaporan
+                          ? new Date(report.tanggalLaporan).toLocaleDateString("id-ID")
+                          : "Tanggal tidak tersedia"}
                       </TableCell>
-                      <TableCell>{getStatusBadge(report)}</TableCell>
+                      <TableCell className="max-w-xs">
+                        <div className="truncate text-sm text-gray-600">
+                          {report.rincian?.length > 0 ? `${report.rincian.length} item` : "Data tidak tersedia"}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {report.createdAt
+                          ? `${Math.floor((Date.now() - new Date(report.createdAt).getTime()) / (1000 * 60 * 60 * 24))} hari lalu`
+                          : "Status tidak tersedia"}
+                      </TableCell>
                       <TableCell>
                         <div className="flex items-center space-x-1">
                           {onView && (

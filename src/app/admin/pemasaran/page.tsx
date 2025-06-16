@@ -13,6 +13,8 @@ import { EnhancedNavbar } from "@/app/components/ui/enhanced-navbar";
 import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { FlexibleProductForm } from "@/app/components/ui/flexible-product-form";
 import { laporanService } from "@/services/laporanService";
+import { pdfService } from "@/services/pdfService";
+import { printService } from "@/services/printService";
 import type { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
@@ -43,7 +45,8 @@ export default function NewMarketingAdminPage() {
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
-  const [editingReport, setEditingReport] = useState<LaporanHarianResponse | null>(null);
+  const [editingReport, setEditingReport] =
+    useState<LaporanHarianResponse | null>(null);
 
   const [formData, setFormData] = useState<MarketingFormData>({
     salesProducts: [], // Form produk yang fleksibel
@@ -53,11 +56,19 @@ export default function NewMarketingAdminPage() {
     salesObstacles: [],
   });
 
+  // Define timeout constants to ensure number type
+  const MESSAGE_TIMEOUT = 3000;
+  const CLEAR_FORM_TIMEOUT = 2000;
+
   useEffect(() => {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "ROLE_PEMASARAN") {
+    // Fix: Accept both ROLE_PEMASARAN and ADMIN
+    if (
+      !storedUserName ||
+      (userRole !== "ADMIN" && userRole !== "ROLE_PEMASARAN")
+    ) {
       router.push("/");
       return;
     }
@@ -81,15 +92,27 @@ export default function NewMarketingAdminPage() {
   const loadSavedReports = async () => {
     try {
       const reports = await laporanService.getMyLaporan();
-      const marketingReports = reports.filter(
-        (report) =>
-          report.divisi === "ROLE_PEMASARAN" || report.divisi === "Pemasaran"
-      );
+      const marketingReports = reports
+        .filter(
+          (report) =>
+            report.divisi === "ROLE_PEMASARAN" ||
+            report.divisi === "Pemasaran" ||
+            report.divisi === "ADMIN"
+        )
+        .map((report) => ({
+          ...report,
+          // Pastikan laporanId tetap sebagai string untuk kompatibilitas dengan interface
+          laporanId: report.laporanId
+            ? String(report.laporanId)
+            : String((report as any).id || Date.now()),
+          // Fix: gunakan namaUser bukan userName
+          namaUser: report.namaUser || userName || "Admin",
+        }));
       setSavedReports(marketingReports);
     } catch (err) {
       console.error("Gagal memuat riwayat laporan:", err);
       setMessage("Gagal memuat riwayat laporan dari server.");
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -170,7 +193,14 @@ export default function NewMarketingAdminPage() {
 
     try {
       if (editingReport) {
-        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        // Convert string to number for API call
+        const reportId = parseInt(editingReport.laporanId, 10);
+
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+
+        await laporanService.updateLaporan(reportId, payload);
         setMessage("Laporan pemasaran berhasil diperbarui!");
         setEditingReport(null);
       } else {
@@ -185,7 +215,7 @@ export default function NewMarketingAdminPage() {
       setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
     } finally {
       setIsLoading(false);
-      setTimeout(() => setMessage(""), 3000);
+      setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
     }
   };
 
@@ -203,7 +233,7 @@ export default function NewMarketingAdminPage() {
       // Mapping berdasarkan kategori
       if (item.kategoriUtama === "PENJUALAN") {
         const productRow: ProductRow = {
-          id: Date.now().toString() + Math.random(),
+          id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
           productName: item.kategoriSub || "Produk",
           description: item.keterangan,
           amount: item.nilaiKuantitas || 0,
@@ -211,28 +241,28 @@ export default function NewMarketingAdminPage() {
         convertedData.salesProducts.push(productRow);
       } else if (item.kategoriUtama === "TARGET_SALES") {
         const formRow: FormRow = {
-          id: Date.now().toString() + Math.random(),
+          id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
           description: item.keterangan,
           amount: item.nilaiKuantitas || 0,
         };
         convertedData.salesTargets.push(formRow);
       } else if (item.kategoriUtama === "REALISASI_SALES") {
         const formRow: FormRow = {
-          id: Date.now().toString() + Math.random(),
+          id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
           description: item.keterangan,
           amount: item.nilaiKuantitas || 0,
         };
         convertedData.salesRealization.push(formRow);
       } else if (item.kategoriUtama === "RETUR_POTONGAN") {
         const formRow: FormRow = {
-          id: Date.now().toString() + Math.random(),
+          id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
           description: item.keterangan,
           amount: item.nilaiKuantitas || 0,
         };
         convertedData.salesReturns.push(formRow);
       } else if (item.kategoriUtama === "KENDALA_PENJUALAN") {
         const formRow: FormRow = {
-          id: Date.now().toString() + Math.random(),
+          id: (Date.now() + Math.random()).toString(), // Fix: ensure string type
           description: item.keterangan,
           amount: item.nilaiKuantitas || 0,
         };
@@ -246,7 +276,7 @@ export default function NewMarketingAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleEditReport = (report: LaporanHarianResponse) => {
@@ -257,22 +287,51 @@ export default function NewMarketingAdminPage() {
         report.tanggalLaporan
       ).toLocaleDateString("id-ID")}`
     );
-    setTimeout(() => setMessage(""), 3000);
+    setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
   };
 
   const handleDeleteReport = async (report: LaporanHarianResponse) => {
     if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
       try {
-        await laporanService.deleteLaporan(report.laporanId);
+        // Convert string to number for API call
+        const reportId = parseInt(report.laporanId, 10);
+
+        if (isNaN(reportId)) {
+          throw new Error("ID laporan tidak valid");
+        }
+
+        await laporanService.deleteLaporan(reportId);
         setMessage("Laporan berhasil dihapus dari server!");
         loadSavedReports();
       } catch (err) {
         console.error("Gagal menghapus laporan:", err);
         setMessage("Gagal menghapus laporan dari server.");
       } finally {
-        setTimeout(() => setMessage(""), 3000);
+        setTimeout(() => setMessage(""), MESSAGE_TIMEOUT);
       }
     }
+  };
+
+  const handleExportPDF = () => {
+    pdfService.exportToPDF({
+      division: "Pemasaran",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handlePrint = () => {
+    printService.printReport({
+      division: "Pemasaran",
+      date: new Date().toISOString(),
+      data: formData,
+      userName: userName,
+    });
+  };
+
+  const handleExportReportPDF = (report: LaporanHarianResponse) => {
+    pdfService.exportReportToPDF(report);
   };
 
   const clearForm = () => {
@@ -285,7 +344,7 @@ export default function NewMarketingAdminPage() {
     });
     setEditingReport(null);
     setMessage("Form telah dikosongkan");
-    setTimeout(() => setMessage(""), 2000);
+    setTimeout(() => setMessage(""), CLEAR_FORM_TIMEOUT);
   };
 
   return (
@@ -299,11 +358,11 @@ export default function NewMarketingAdminPage() {
         divisionColor="green"
       />
 
-      <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
+      <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-8 py-4 lg:py-6">
         {/* Layout Utama: Panel Kiri (Form) + Panel Kanan (Preview) */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
           {/* Panel Kiri - Editor Form */}
-          <div className="space-y-6">
+          <div className="space-y-4 lg:space-y-6">
             <EnhancedFormCard
               title="Editor Laporan Pemasaran"
               onClear={clearForm}
@@ -312,8 +371,8 @@ export default function NewMarketingAdminPage() {
               divisionColor="green"
             >
               {/* A. PENJUALAN HARIAN - Form Produk Fleksibel */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   A. PENJUALAN HARIAN
                 </h3>
 
@@ -322,14 +381,16 @@ export default function NewMarketingAdminPage() {
                   subtitle="Tambahkan produk apa saja yang dijual hari ini"
                   buttonText="+ Tambah Produk"
                   products={formData.salesProducts}
-                  onProductsChange={(products) => updateSection("salesProducts", products)}
+                  onProductsChange={(products) =>
+                    updateSection("salesProducts", products)
+                  }
                   sectionColor="green"
                 />
               </div>
 
               {/* B. TARGET PENJUALAN SALES */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   B. TARGET PENJUALAN SALES
                 </h3>
 
@@ -344,8 +405,8 @@ export default function NewMarketingAdminPage() {
               </div>
 
               {/* C. PENJUALAN SALES */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   C. PENJUALAN SALES
                 </h3>
 
@@ -354,14 +415,16 @@ export default function NewMarketingAdminPage() {
                   subtitle="Realisasi penjualan per sales"
                   buttonText="+ Tambah Realisasi Sales"
                   rows={formData.salesRealization}
-                  onRowsChange={(rows) => updateSection("salesRealization", rows)}
+                  onRowsChange={(rows) =>
+                    updateSection("salesRealization", rows)
+                  }
                   sectionColor="green"
                 />
               </div>
 
               {/* D. RETUR/POTONGAN PENJUALAN */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   D. RETUR/POTONGAN PENJUALAN
                 </h3>
 
@@ -376,8 +439,8 @@ export default function NewMarketingAdminPage() {
               </div>
 
               {/* E. KENDALA PENJUALAN */}
-              <div className="space-y-4">
-                <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
+              <div className="space-y-3 lg:space-y-4">
+                <h3 className="text-sm lg:text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   E. KENDALA PENJUALAN
                 </h3>
 
@@ -419,14 +482,14 @@ export default function NewMarketingAdminPage() {
               )}
 
               {/* Tombol Aksi */}
-              <div className="flex flex-col gap-3 pt-4 border-t">
+              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
                 <Button
                   type="submit"
-                  className="w-full"
+                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
                   size="lg"
                   disabled={isLoading}
                 >
-                  <Save className="h-5 w-5 mr-2" />
+                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                   {isLoading
                     ? "Menyimpan..."
                     : editingReport
@@ -439,20 +502,34 @@ export default function NewMarketingAdminPage() {
                     type="button"
                     variant="outline"
                     size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
                     onClick={clearForm}
                   >
                     Batal Edit
                   </Button>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
-                  <Button type="button" variant="outline" size="lg">
-                    <FileDown className="h-5 w-5 mr-2" />
-                    Export PDF
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handleExportPDF}
+                  >
+                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
+                    <span className="hidden sm:inline">Export PDF</span>
+                    <span className="sm:hidden">PDF</span>
                   </Button>
 
-                  <Button type="button" variant="outline" size="lg">
-                    <Printer className="h-5 w-5 mr-2" />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    className="h-12 lg:h-11 text-sm lg:text-base"
+                    onClick={handlePrint}
+                  >
+                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
                     Print
                   </Button>
                 </div>
@@ -461,13 +538,13 @@ export default function NewMarketingAdminPage() {
           </div>
 
           {/* Panel Kanan - Preview Dokumen */}
-          <div className="lg:sticky lg:top-6">
-            <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
-              <h2 className="text-lg font-bold text-gray-900 mb-4">
+          <div className="xl:sticky xl:top-6 xl:self-start">
+            <div className="bg-white rounded-lg shadow-sm border p-3 lg:p-4 mb-4 max-h-96 xl:max-h-[calc(100vh-8rem)] overflow-y-auto">
+              <h2 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">
                 Preview Dokumen
               </h2>
               <DocumentPreview
-                division="Pemasaran & Penjualan"
+                division="Pemasaran"
                 date={new Date().toISOString()}
                 data={formData}
               />
@@ -476,14 +553,15 @@ export default function NewMarketingAdminPage() {
         </div>
 
         {/* Panel Bawah - Riwayat Laporan */}
-        <ReportHistory
-          reports={savedReports}
-          onView={handleViewReport}
-          onEdit={handleEditReport}
-          onDelete={handleDeleteReport}
-          onExport={(report) => console.log("Export", report)}
-          className="mt-6"
-        />
+        <div className="mt-4 lg:mt-6">
+          <ReportHistory
+            reports={savedReports}
+            onView={handleViewReport}
+            onEdit={handleEditReport}
+            onDelete={handleDeleteReport}
+            onExport={handleExportReportPDF}
+          />
+        </div>
       </div>
     </div>
   );

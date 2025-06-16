@@ -161,7 +161,7 @@ export default function SuperAdminPage() {
     const matchesSearch =
       searchTerm === "" ||
       report.divisi.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      report.submittedBy.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      report.submittedBy?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       report.tanggalLaporan.includes(searchTerm);
 
     return matchesDivision && matchesSearch;
@@ -508,7 +508,11 @@ export default function SuperAdminPage() {
                           <TableCell>
                             <Badge variant="outline">{report.divisi}</Badge>
                           </TableCell>
-                          <TableCell>{report.submittedBy}</TableCell>
+                          <TableCell className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                            {report.submittedBy ||
+                              report.namaUser ||
+                              "Unknown User"}
+                          </TableCell>
                           <TableCell>{summary.key1}</TableCell>
                           <TableCell>{summary.key2}</TableCell>
                           <TableCell>

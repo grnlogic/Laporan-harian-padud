@@ -1,6 +1,7 @@
 "use client";
 
 import { StatusIndicator } from "./components/ui/status-indicator";
+import { ForgotPasswordModal } from "./components/ui/forgot-password-modal";
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -15,9 +16,11 @@ import {
   CardTitle,
 } from "@/app/components/ui/card";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { Building2, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
+import { UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { authService } from "@/lib/api";
+import Image from "next/image";
+import Logo from "../assets/Adobe Express - file.png";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -25,6 +28,7 @@ export default function LoginPage() {
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [showStatus, setShowStatus] = useState(false);
+  const [showForgotPassword, setShowForgotPassword] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -62,7 +66,7 @@ export default function LoginPage() {
 
       // Routing berdasarkan role
       console.log("🚀 Mulai routing...");
-      
+
       if (response.role === "ROLE_SUPERADMIN") {
         console.log("✅ Redirect ke super-admin");
         router.push("/super-admin");
@@ -111,11 +115,20 @@ export default function LoginPage() {
           {/* Header */}
           <div className="text-center mb-8">
             <div className="flex justify-center mb-4">
-              <div className="bg-blue-600 p-3 rounded-full">
-                <Building2 className="h-8 w-8 text-white" />
+              {/* Menggunakan logo perusahaan dari assets */}
+              <div className="bg-white p-2 rounded-full shadow-lg">
+                <Image
+                  src={Logo}
+                  alt="PADUD JAYA Logo"
+                  width={64}
+                  height={64}
+                  className="w-16 h-16 object-contain"
+                />
               </div>
             </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">PADUD JAYA</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">
+              PADUD JAYA
+            </h1>
             <p className="text-lg text-gray-600">Sistem Laporan Harian</p>
           </div>
 
@@ -131,7 +144,6 @@ export default function LoginPage() {
             <CardContent>
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="username">Username</Label>
                   <Input
                     id="username"
                     type="text"
@@ -143,7 +155,6 @@ export default function LoginPage() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="password">Password</Label>
                   <Input
                     id="password"
                     type="password"
@@ -162,24 +173,31 @@ export default function LoginPage() {
 
                 <Button
                   type="submit"
-                  className="w-full h-11 text-lg"
+                  className="w-full h-11"
                   disabled={isLoading}
                 >
-                  {isLoading ? "Memproses..." : "Masuk"}
+                  {isLoading ? "Masuk..." : "Masuk"}
                 </Button>
               </form>
 
-              <div className="mt-6 text-center">
+              <div className="mt-6 text-center space-y-2">
                 <p className="text-sm text-gray-600">
                   Belum punya akun?{" "}
                   <Link
                     href="/register"
-                    className="text-blue-600 hover:text-blue-500 font-medium"
+                    className="font-medium text-blue-600 hover:text-blue-500"
                   >
-                    <UserPlus className="h-4 w-4 inline mr-1" />
                     Daftar di sini
                   </Link>
                 </p>
+
+                <button
+                  type="button"
+                  onClick={() => setShowForgotPassword(true)}
+                  className="text-sm text-red-600 hover:text-red-500 font-medium underline"
+                >
+                  Lupa Password? Butuh Bantuan?
+                </button>
               </div>
 
               {/* Status System Dropdown */}
@@ -198,7 +216,7 @@ export default function LoginPage() {
                     <ChevronDown className="h-4 w-4 text-gray-600" />
                   )}
                 </button>
-                
+
                 {showStatus && (
                   <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
                     <StatusIndicator />
@@ -208,22 +226,26 @@ export default function LoginPage() {
 
               {/* Info untuk testing */}
               <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700 mb-2">
+                <h4 className="text-sm font-medium text-gray-700 mb-2">
                   Info Penggunaan:
-                </p>
-                <div className="text-xs text-gray-600 space-y-1">
-                  <p>
-                    • Gunakan akun yang sudah didaftarkan melalui endpoint
-                    register
-                  </p>
-                  <p>• Atau daftar akun baru melalui halaman registrasi</p>
-                  <p>• Sistem akan otomatis mengarahkan sesuai role dan divisi</p>
-                </div>
+                </h4>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  <li>• Gunakan akun yang sudah didaftarkan</li>
+                  <li>
+                    • Sistem akan otomatis mengarahkan sesuai role dan divisi
+                  </li>
+                </ul>
               </div>
             </CardContent>
           </Card>
         </div>
       </div>
+
+      {/* Forgot Password Modal */}
+      <ForgotPasswordModal
+        isOpen={showForgotPassword}
+        onClose={() => setShowForgotPassword(false)}
+      />
     </div>
   );
 }
