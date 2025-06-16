@@ -28,6 +28,15 @@ export const api = {
 
   // Demo endpoint
   demo: `${API_BASE_URL}/v1/demo`,
+
+  // Health endpoints
+  health: {
+    status: `${API_BASE_URL}/health/status`,
+    ping: `${API_BASE_URL}/health/ping`,
+    database: `${API_BASE_URL}/health/database`,
+    detailed: `${API_BASE_URL}/health/detailed`,
+    info: `${API_BASE_URL}/health/info`,
+  },
 };
 
 // Helper function untuk HTTP requests dengan JWT token (DIPERBAIKI)
@@ -144,4 +153,96 @@ export const userService = {
     apiRequest(`/v1/users/${id}`, {
       method: "DELETE",
     }),
+};
+
+// Health service
+export const healthService = {
+  getStatus: async () => {
+    try {
+      const response = await fetch(api.health.status, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Health check failed:", error);
+      throw error;
+    }
+  },
+
+  ping: async () => {
+    try {
+      const response = await fetch(api.health.ping, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error("Ping failed:", error);
+      throw error;
+    }
+  },
+
+  getDatabaseStatus: async () => {
+    try {
+      const response = await fetch(api.health.database, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      const data = await response.json();
+      return data;
+    } catch (error) {
+      console.error("Database status check failed:", error);
+      throw error;
+    }
+  },
+
+  getDetailedStatus: async () => {
+    try {
+      const response = await fetch(api.health.detailed, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error("Detailed status check failed:", error);
+      throw error;
+    }
+  },
+
+  getInfo: async () => {
+    try {
+      const response = await fetch(api.health.info, {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+      });
+
+      return await response.json();
+    } catch (error) {
+      console.error("Info check failed:", error);
+      throw error;
+    }
+  },
 };

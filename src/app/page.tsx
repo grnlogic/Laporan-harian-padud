@@ -1,5 +1,6 @@
 "use client";
 
+import { StatusIndicator } from "./components/ui/status-indicator";
 import type React from "react";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
@@ -14,7 +15,7 @@ import {
   CardTitle,
 } from "@/app/components/ui/card";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
-import { Building2, UserPlus } from "lucide-react";
+import { Building2, UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { authService } from "@/lib/api";
 
@@ -23,6 +24,7 @@ export default function LoginPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [showStatus, setShowStatus] = useState(false);
   const router = useRouter();
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -103,99 +105,125 @@ export default function LoginPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="w-full max-w-md">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="flex justify-center mb-4">
-            <div className="bg-blue-600 p-3 rounded-full">
-              <Building2 className="h-8 w-8 text-white" />
-            </div>
-          </div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">PADUD JAYA</h1>
-          <p className="text-lg text-gray-600">Sistem Laporan Harian</p>
-        </div>
-
+      <div className="max-w-md w-full space-y-8">
         {/* Login Form */}
-        <Card className="shadow-lg">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-2xl text-center">
-              Masuk ke Sistem
-            </CardTitle>
-            <CardDescription className="text-center">
-              Masukkan kredensial Anda untuk mengakses sistem
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleLogin} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="username">Username</Label>
-                <Input
-                  id="username"
-                  type="text"
-                  placeholder="Masukkan username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  className="h-11"
-                />
+        <div className="bg-white rounded-xl shadow-lg p-8">
+          {/* Header */}
+          <div className="text-center mb-8">
+            <div className="flex justify-center mb-4">
+              <div className="bg-blue-600 p-3 rounded-full">
+                <Building2 className="h-8 w-8 text-white" />
               </div>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">PADUD JAYA</h1>
+            <p className="text-lg text-gray-600">Sistem Laporan Harian</p>
+          </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Masukkan password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="h-11"
-                />
-              </div>
+          <Card className="shadow-lg">
+            <CardHeader className="space-y-1">
+              <CardTitle className="text-2xl text-center">
+                Masuk ke Sistem
+              </CardTitle>
+              <CardDescription className="text-center">
+                Masukkan kredensial Anda untuk mengakses sistem
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={handleLogin} className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="username">Username</Label>
+                  <Input
+                    id="username"
+                    type="text"
+                    placeholder="Masukkan username"
+                    value={username}
+                    onChange={(e) => setUsername(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
 
-              {error && (
-                <Alert variant="destructive">
-                  <AlertDescription>{error}</AlertDescription>
-                </Alert>
-              )}
+                <div className="space-y-2">
+                  <Label htmlFor="password">Password</Label>
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Masukkan password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="h-11"
+                  />
+                </div>
 
-              <Button
-                type="submit"
-                className="w-full h-11 text-lg"
-                disabled={isLoading}
-              >
-                {isLoading ? "Memproses..." : "Masuk"}
-              </Button>
-            </form>
+                {error && (
+                  <Alert variant="destructive">
+                    <AlertDescription>{error}</AlertDescription>
+                  </Alert>
+                )}
 
-            <div className="mt-6 text-center">
-              <p className="text-sm text-gray-600">
-                Belum punya akun?{" "}
-                <Link
-                  href="/register"
-                  className="text-blue-600 hover:text-blue-500 font-medium"
+                <Button
+                  type="submit"
+                  className="w-full h-11 text-lg"
+                  disabled={isLoading}
                 >
-                  <UserPlus className="h-4 w-4 inline mr-1" />
-                  Daftar di sini
-                </Link>
-              </p>
-            </div>
+                  {isLoading ? "Memproses..." : "Masuk"}
+                </Button>
+              </form>
 
-            {/* Info untuk testing */}
-            <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-              <p className="text-sm font-medium text-gray-700 mb-2">
-                Info Penggunaan:
-              </p>
-              <div className="text-xs text-gray-600 space-y-1">
-                <p>
-                  • Gunakan akun yang sudah didaftarkan melalui endpoint register
+              <div className="mt-6 text-center">
+                <p className="text-sm text-gray-600">
+                  Belum punya akun?{" "}
+                  <Link
+                    href="/register"
+                    className="text-blue-600 hover:text-blue-500 font-medium"
+                  >
+                    <UserPlus className="h-4 w-4 inline mr-1" />
+                    Daftar di sini
+                  </Link>
                 </p>
-                <p>• Atau daftar akun baru melalui halaman registrasi</p>
-                <p>• Sistem akan otomatis mengarahkan sesuai role dan divisi</p>
               </div>
-            </div>
-          </CardContent>
-        </Card>
+
+              {/* Status System Dropdown */}
+              <div className="mt-6">
+                <button
+                  type="button"
+                  onClick={() => setShowStatus(!showStatus)}
+                  className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <span className="text-sm font-medium text-gray-700">
+                    Status Sistem
+                  </span>
+                  {showStatus ? (
+                    <ChevronUp className="h-4 w-4 text-gray-600" />
+                  ) : (
+                    <ChevronDown className="h-4 w-4 text-gray-600" />
+                  )}
+                </button>
+                
+                {showStatus && (
+                  <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
+                    <StatusIndicator />
+                  </div>
+                )}
+              </div>
+
+              {/* Info untuk testing */}
+              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                <p className="text-sm font-medium text-gray-700 mb-2">
+                  Info Penggunaan:
+                </p>
+                <div className="text-xs text-gray-600 space-y-1">
+                  <p>
+                    • Gunakan akun yang sudah didaftarkan melalui endpoint
+                    register
+                  </p>
+                  <p>• Atau daftar akun baru melalui halaman registrasi</p>
+                  <p>• Sistem akan otomatis mengarahkan sesuai role dan divisi</p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   );
 }
-
