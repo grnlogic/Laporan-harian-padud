@@ -1,17 +1,18 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
-import { Save, FileDown, Printer, RefreshCw } from "lucide-react";
+import { Save, FileDown, Printer } from "lucide-react";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { ReportHistory } from "@/app/components/ui/report-history";
 import { EnhancedNavbar } from "@/app/components/ui/enhanced-navbar";
 import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
+import { laporanService } from "@/services/laporanService";
+import type { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
   id: string;
@@ -33,7 +34,8 @@ export default function NewProductionAdminPage() {
   const [currentDate, setCurrentDate] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
+  const [editingReport, setEditingReport] = useState<LaporanHarianResponse | null>(null);
 
   const [formData, setFormData] = useState<ProductionFormData>({
     actualProduction: [],
@@ -47,14 +49,15 @@ export default function NewProductionAdminPage() {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "admin") {
+    // Perbaiki validasi role untuk produksi
+    if (!storedUserName || userRole !== "ROLE_PRODUKSI") {
       router.push("/");
       return;
     }
 
     setUserName(storedUserName);
 
-    // Set current date
+    // Set tanggal saat ini
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
       weekday: "long",
@@ -64,15 +67,24 @@ export default function NewProductionAdminPage() {
     };
     setCurrentDate(today.toLocaleDateString("id-ID", options));
 
-    // Load saved reports
+    // Muat laporan tersimpan dari backend
     loadSavedReports();
   }, [router]);
 
-  const loadSavedReports = () => {
-    const reports = JSON.parse(
-      localStorage.getItem("productionReports") || "[]"
-    );
-    setSavedReports(reports);
+  const loadSavedReports = async () => {
+    try {
+      const reports = await laporanService.getMyLaporan();
+      // Filter hanya laporan produksi
+      const productionReports = reports.filter(
+        (report) =>
+          report.divisi === "ROLE_PRODUKSI" || report.divisi === "Produksi"
+      );
+      setSavedReports(productionReports);
+    } catch (err) {
+      console.error("Gagal memuat riwayat laporan:", err);
+      setMessage("Gagal memuat riwayat laporan dari server.");
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   const handleLogout = () => {
@@ -93,87 +105,152 @@ export default function NewProductionAdminPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setMessage("");
 
-    // Validate that at least one section has data
-    const hasData = Object.values(formData).some(
-      (section) => section.length > 0
-    );
+    // 1. Kumpulkan semua rincian dari form ke dalam satu array
+    const semuaRincian = [
+      // HASIL PRODUKSI HARIAN
+      ...formData.actualProduction.map((row) => ({
+        ...row,
+        kategoriUtama: "HASIL_PRODUKSI",
+        kategoriSub: undefined,
+        satuan: "Pcs",
+      })),
+      // BARANG GAGAL/CACAT
+      ...formData.defectiveProducts.map((row) => ({
+        ...row,
+        kategoriUtama: "BARANG_CACAT",
+        kategoriSub: undefined,
+        satuan: "Pcs",
+      })),
+      // STOCK BARANG JADI
+      ...formData.finishedGoodsStock.map((row) => ({
+        ...row,
+        kategoriUtama: "STOCK_BARANG_JADI",
+        kategoriSub: undefined,
+        satuan: "Pcs",
+      })),
+      // HP BARANG JADI
+      ...formData.finishedGoodsHP.map((row) => ({
+        ...row,
+        kategoriUtama: "HP_BARANG_JADI",
+        kategoriSub: undefined,
+        satuan: "Rupiah",
+      })),
+      // KENDALA PRODUKSI
+      ...formData.productionObstacles.map((row) => ({
+        ...row,
+        kategoriUtama: "KENDALA_PRODUKSI",
+        kategoriSub: undefined,
+        satuan: "",
+      })),
+    ];
 
-    if (!hasData) {
+    if (semuaRincian.length === 0) {
       setMessage("Minimal satu bagian harus diisi.");
       setIsLoading(false);
       return;
     }
 
-    // Simulate saving
-    setTimeout(() => {
-      const reportData = {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split("T")[0],
-        division: "Produksi",
-        data: formData,
-        createdAt: new Date().toISOString(),
-        createdBy: userName,
+    // 2. Format data sesuai ekspektasi backend
+    const payload: LaporanHarianRequest = {
+      tanggalLaporan: new Date().toISOString().split("T")[0],
+      rincian: semuaRincian.map((item) => ({
+        kategoriUtama: item.kategoriUtama,
+        kategoriSub: item.kategoriSub || null,
+        keterangan: item.description,
+        nilaiKuantitas: item.amount || null,
+        satuan: item.satuan,
+      })),
+    };
+
+    try {
+      if (editingReport) {
+        // Perbarui laporan yang sudah ada
+        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        setMessage("Laporan produksi berhasil diperbarui!");
+        setEditingReport(null);
+      } else {
+        // Buat laporan baru
+        await laporanService.createLaporan(payload);
+        setMessage("Laporan produksi berhasil disimpan ke server!");
+      }
+
+      loadSavedReports(); // Muat ulang riwayat dari server
+      clearForm(); // Bersihkan form
+    } catch (err) {
+      console.error("Gagal menyimpan laporan:", err);
+      setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
+    } finally {
+      setIsLoading(false);
+      setTimeout(() => setMessage(""), 3000);
+    }
+  };
+
+  const handleViewReport = (report: LaporanHarianResponse) => {
+    // Konversi data backend kembali ke format form
+    const convertedData: ProductionFormData = {
+      actualProduction: [],
+      defectiveProducts: [],
+      finishedGoodsStock: [],
+      finishedGoodsHP: [],
+      productionObstacles: [],
+    };
+
+    report.rincian.forEach((item) => {
+      const formRow: FormRow = {
+        id: Date.now().toString() + Math.random(),
+        description: item.keterangan,
+        amount: item.nilaiKuantitas || 0,
       };
 
-      const existingReports = JSON.parse(
-        localStorage.getItem("productionReports") || "[]"
-      );
-      existingReports.unshift(reportData);
-      localStorage.setItem(
-        "productionReports",
-        JSON.stringify(existingReports)
-      );
+      // Mapping berdasarkan kategori
+      if (item.kategoriUtama === "HASIL_PRODUKSI") {
+        convertedData.actualProduction.push(formRow);
+      } else if (item.kategoriUtama === "BARANG_CACAT") {
+        convertedData.defectiveProducts.push(formRow);
+      } else if (item.kategoriUtama === "STOCK_BARANG_JADI") {
+        convertedData.finishedGoodsStock.push(formRow);
+      } else if (item.kategoriUtama === "HP_BARANG_JADI") {
+        convertedData.finishedGoodsHP.push(formRow);
+      } else if (item.kategoriUtama === "KENDALA_PRODUKSI") {
+        convertedData.productionObstacles.push(formRow);
+      }
+    });
 
-      setMessage("Laporan produksi berhasil disimpan!");
-      loadSavedReports();
-
-      // Reset form
-      setFormData({
-        actualProduction: [],
-        defectiveProducts: [],
-        finishedGoodsStock: [],
-        finishedGoodsHP: [],
-        productionObstacles: [],
-      });
-
-      setTimeout(() => setMessage(""), 3000);
-      setIsLoading(false);
-    }, 1000);
-  };
-
-  const handleViewReport = (report: any) => {
-    setFormData(report.data);
+    setFormData(convertedData);
     setMessage(
-      `Menampilkan laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Menampilkan laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleEditReport = (report: any) => {
-    setFormData(report.data);
+  const handleEditReport = (report: LaporanHarianResponse) => {
+    // Sama seperti handleViewReport untuk editing
+    handleViewReport(report);
+    setEditingReport(report);
     setMessage(
-      `Mode edit: Laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
+      `Mode edit: Laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
     );
     setTimeout(() => setMessage(""), 3000);
   };
 
-  const handleDeleteReport = (report: any) => {
-    if (confirm("Apakah Anda yakin ingin menghapus laporan ini?")) {
-      const existingReports = JSON.parse(
-        localStorage.getItem("productionReports") || "[]"
-      );
-      const updatedReports = existingReports.filter(
-        (r: any) => r.id !== report.id
-      );
-      localStorage.setItem("productionReports", JSON.stringify(updatedReports));
-      loadSavedReports();
-      setMessage("Laporan berhasil dihapus!");
-      setTimeout(() => setMessage(""), 3000);
+  const handleDeleteReport = async (report: LaporanHarianResponse) => {
+    if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
+      try {
+        await laporanService.deleteLaporan(report.laporanId);
+        setMessage("Laporan berhasil dihapus dari server!");
+        loadSavedReports(); // Muat ulang data dari server untuk memperbarui daftar
+      } catch (err) {
+        console.error("Gagal menghapus laporan:", err);
+        setMessage("Gagal menghapus laporan dari server.");
+      } finally {
+        setTimeout(() => setMessage(""), 3000);
+      }
     }
   };
 
@@ -185,6 +262,7 @@ export default function NewProductionAdminPage() {
       finishedGoodsHP: [],
       productionObstacles: [],
     });
+    setEditingReport(null);
     setMessage("Form telah dikosongkan");
     setTimeout(() => setMessage(""), 2000);
   };
@@ -201,9 +279,9 @@ export default function NewProductionAdminPage() {
       />
 
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Main Layout: Left Panel (Form) + Right Panel (Preview) */}
+        {/* Layout Utama: Panel Kiri (Form) + Panel Kanan (Preview) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Left Panel - Form Editor */}
+          {/* Panel Kiri - Editor Form */}
           <div className="space-y-6">
             <EnhancedFormCard
               title="Editor Laporan Produksi"
@@ -310,12 +388,14 @@ export default function NewProductionAdminPage() {
                 />
               </div>
 
-              {/* Messages */}
+              {/* Pesan */}
               {message && (
                 <Alert
                   className={
                     message.includes("berhasil")
                       ? "border-green-200 bg-green-50"
+                      : message.includes("Gagal") || message.includes("gagal")
+                      ? "border-red-200 bg-red-50"
                       : "border-blue-200 bg-blue-50"
                   }
                 >
@@ -323,6 +403,8 @@ export default function NewProductionAdminPage() {
                     className={
                       message.includes("berhasil")
                         ? "text-green-800"
+                        : message.includes("Gagal") || message.includes("gagal")
+                        ? "text-red-800"
                         : "text-blue-800"
                     }
                   >
@@ -331,7 +413,7 @@ export default function NewProductionAdminPage() {
                 </Alert>
               )}
 
-              {/* Action Buttons */}
+              {/* Tombol Aksi */}
               <div className="flex flex-col gap-3 pt-4 border-t">
                 <Button
                   type="submit"
@@ -340,8 +422,23 @@ export default function NewProductionAdminPage() {
                   disabled={isLoading}
                 >
                   <Save className="h-5 w-5 mr-2" />
-                  {isLoading ? "Menyimpan..." : "Simpan Laporan"}
+                  {isLoading
+                    ? "Menyimpan..."
+                    : editingReport
+                    ? "Perbarui Laporan"
+                    : "Simpan Laporan"}
                 </Button>
+
+                {editingReport && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={clearForm}
+                  >
+                    Batal Edit
+                  </Button>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <Button type="button" variant="outline" size="lg">
@@ -358,7 +455,7 @@ export default function NewProductionAdminPage() {
             </EnhancedFormCard>
           </div>
 
-          {/* Right Panel - Document Preview */}
+          {/* Panel Kanan - Preview Dokumen */}
           <div className="lg:sticky lg:top-6">
             <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
@@ -373,7 +470,7 @@ export default function NewProductionAdminPage() {
           </div>
         </div>
 
-        {/* Bottom Panel - Report History */}
+        {/* Panel Bawah - Riwayat Laporan */}
         <ReportHistory
           reports={savedReports}
           onView={handleViewReport}

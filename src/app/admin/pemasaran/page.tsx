@@ -1,17 +1,19 @@
 "use client";
 
 import type React from "react";
-
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/app/components/ui/button";
-import { Save, FileDown, Printer, RefreshCw } from "lucide-react";
+import { Save, FileDown, Printer } from "lucide-react";
 import { Alert, AlertDescription } from "@/app/components/ui/alert";
 import { EnhancedDynamicForm } from "@/app/components/ui/enhanced-dynamic-form";
 import { DocumentPreview } from "@/app/components/ui/document-preview";
 import { ReportHistory } from "@/app/components/ui/report-history";
 import { EnhancedNavbar } from "@/app/components/ui/enhanced-navbar";
 import { EnhancedFormCard } from "@/app/components/ui/enhanced-form-card";
+import { FlexibleProductForm } from "@/app/components/ui/flexible-product-form";
+import { laporanService } from "@/services/laporanService";
+import type { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api";
 
 interface FormRow {
   id: string;
@@ -19,13 +21,15 @@ interface FormRow {
   amount: number;
 }
 
+interface ProductRow {
+  id: string;
+  productName: string;
+  description: string;
+  amount: number;
+}
+
 interface MarketingFormData {
-  salesPadud06: FormRow[];
-  salesSuperDeluxe: FormRow[];
-  salesSuperDeluxeRed: FormRow[];
-  salesPadud98: FormRow[];
-  salesPadud98Red: FormRow[];
-  salesPrimavera: FormRow[];
+  salesProducts: ProductRow[]; // Ganti semua produk tetap dengan array produk fleksibel
   salesTargets: FormRow[];
   salesRealization: FormRow[];
   salesReturns: FormRow[];
@@ -38,15 +42,11 @@ export default function NewMarketingAdminPage() {
   const [currentDate, setCurrentDate] = useState("");
   const [message, setMessage] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  const [savedReports, setSavedReports] = useState<any[]>([]);
+  const [savedReports, setSavedReports] = useState<LaporanHarianResponse[]>([]);
+  const [editingReport, setEditingReport] = useState<LaporanHarianResponse | null>(null);
 
   const [formData, setFormData] = useState<MarketingFormData>({
-    salesPadud06: [],
-    salesSuperDeluxe: [],
-    salesSuperDeluxeRed: [],
-    salesPadud98: [],
-    salesPadud98Red: [],
-    salesPrimavera: [],
+    salesProducts: [], // Form produk yang fleksibel
     salesTargets: [],
     salesRealization: [],
     salesReturns: [],
@@ -57,14 +57,14 @@ export default function NewMarketingAdminPage() {
     const storedUserName = localStorage.getItem("userName");
     const userRole = localStorage.getItem("userRole");
 
-    if (!storedUserName || userRole !== "admin") {
+    if (!storedUserName || userRole !== "ROLE_PEMASARAN") {
       router.push("/");
       return;
     }
 
     setUserName(storedUserName);
 
-    // Set current date
+    // Set tanggal saat ini
     const today = new Date();
     const options: Intl.DateTimeFormatOptions = {
       weekday: "long",
@@ -74,15 +74,23 @@ export default function NewMarketingAdminPage() {
     };
     setCurrentDate(today.toLocaleDateString("id-ID", options));
 
-    // Load saved reports
+    // Muat laporan tersimpan dari backend
     loadSavedReports();
   }, [router]);
 
-  const loadSavedReports = () => {
-    const reports = JSON.parse(
-      localStorage.getItem("marketingReports") || "[]"
-    );
-    setSavedReports(reports);
+  const loadSavedReports = async () => {
+    try {
+      const reports = await laporanService.getMyLaporan();
+      const marketingReports = reports.filter(
+        (report) =>
+          report.divisi === "ROLE_PEMASARAN" || report.divisi === "Pemasaran"
+      );
+      setSavedReports(marketingReports);
+    } catch (err) {
+      console.error("Gagal memuat riwayat laporan:", err);
+      setMessage("Gagal memuat riwayat laporan dari server.");
+      setTimeout(() => setMessage(""), 3000);
+    }
   };
 
   const handleLogout = () => {
@@ -90,7 +98,7 @@ export default function NewMarketingAdminPage() {
     router.push("/");
   };
 
-  const updateSection = (section: keyof MarketingFormData, rows: FormRow[]) => {
+  const updateSection = (section: keyof MarketingFormData, rows: any[]) => {
     setFormData((prev) => ({
       ...prev,
       [section]: rows,
@@ -100,105 +108,182 @@ export default function NewMarketingAdminPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setMessage("");
 
-    // Validate that at least one section has data
-    const hasData = Object.values(formData).some(
-      (section) => section.length > 0
-    );
+    // 1. Kumpulkan semua rincian dari form ke dalam satu array
+    const semuaRincian = [
+      // PENJUALAN HARIAN - Produk Fleksibel
+      ...formData.salesProducts.map((row) => ({
+        ...row,
+        kategoriUtama: "PENJUALAN",
+        kategoriSub: row.productName, // Nama produk sebagai sub-kategori
+        satuan: "Rupiah",
+        description: row.description, // Deskripsi tetap dari field description
+      })),
+      // TARGET SALES
+      ...formData.salesTargets.map((row) => ({
+        ...row,
+        kategoriUtama: "TARGET_SALES",
+        kategoriSub: undefined,
+        satuan: "Rupiah",
+      })),
+      // REALISASI SALES
+      ...formData.salesRealization.map((row) => ({
+        ...row,
+        kategoriUtama: "REALISASI_SALES",
+        kategoriSub: undefined,
+        satuan: "Rupiah",
+      })),
+      // RETUR/POTONGAN
+      ...formData.salesReturns.map((row) => ({
+        ...row,
+        kategoriUtama: "RETUR_POTONGAN",
+        kategoriSub: undefined,
+        satuan: "Rupiah",
+      })),
+      // KENDALA PENJUALAN
+      ...formData.salesObstacles.map((row) => ({
+        ...row,
+        kategoriUtama: "KENDALA_PENJUALAN",
+        kategoriSub: undefined,
+        satuan: "",
+      })),
+    ];
 
-    if (!hasData) {
+    if (semuaRincian.length === 0) {
       setMessage("Minimal satu bagian harus diisi.");
       setIsLoading(false);
       return;
     }
 
-    // Simulate saving
-    setTimeout(() => {
-      const reportData = {
-        id: Date.now().toString(),
-        date: new Date().toISOString().split("T")[0],
-        division: "Pemasaran & Penjualan",
-        data: formData,
-        createdAt: new Date().toISOString(),
-        createdBy: userName,
-      };
+    // 2. Format data sesuai ekspektasi backend
+    const payload: LaporanHarianRequest = {
+      tanggalLaporan: new Date().toISOString().split("T")[0],
+      rincian: semuaRincian.map((item) => ({
+        kategoriUtama: item.kategoriUtama,
+        kategoriSub: item.kategoriSub || null,
+        keterangan: item.description,
+        nilaiKuantitas: item.amount || null,
+        satuan: item.satuan,
+      })),
+    };
 
-      const existingReports = JSON.parse(
-        localStorage.getItem("marketingReports") || "[]"
-      );
-      existingReports.unshift(reportData);
-      localStorage.setItem("marketingReports", JSON.stringify(existingReports));
+    try {
+      if (editingReport) {
+        await laporanService.updateLaporan(editingReport.laporanId, payload);
+        setMessage("Laporan pemasaran berhasil diperbarui!");
+        setEditingReport(null);
+      } else {
+        await laporanService.createLaporan(payload);
+        setMessage("Laporan pemasaran berhasil disimpan ke server!");
+      }
 
-      setMessage("Laporan pemasaran berhasil disimpan!");
       loadSavedReports();
-
-      // Reset form
-      setFormData({
-        salesPadud06: [],
-        salesSuperDeluxe: [],
-        salesSuperDeluxeRed: [],
-        salesPadud98: [],
-        salesPadud98Red: [],
-        salesPrimavera: [],
-        salesTargets: [],
-        salesRealization: [],
-        salesReturns: [],
-        salesObstacles: [],
-      });
-
-      setTimeout(() => setMessage(""), 3000);
+      clearForm();
+    } catch (err) {
+      console.error("Gagal menyimpan laporan:", err);
+      setMessage("Gagal menyimpan laporan ke server. Silakan coba lagi.");
+    } finally {
       setIsLoading(false);
-    }, 1000);
-  };
-
-  const handleViewReport = (report: any) => {
-    setFormData(report.data);
-    setMessage(
-      `Menampilkan laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
-    );
-    setTimeout(() => setMessage(""), 3000);
-  };
-
-  const handleEditReport = (report: any) => {
-    setFormData(report.data);
-    setMessage(
-      `Mode edit: Laporan tanggal ${new Date(report.date).toLocaleDateString(
-        "id-ID"
-      )}`
-    );
-    setTimeout(() => setMessage(""), 3000);
-  };
-
-  const handleDeleteReport = (report: any) => {
-    if (confirm("Apakah Anda yakin ingin menghapus laporan ini?")) {
-      const existingReports = JSON.parse(
-        localStorage.getItem("marketingReports") || "[]"
-      );
-      const updatedReports = existingReports.filter(
-        (r: any) => r.id !== report.id
-      );
-      localStorage.setItem("marketingReports", JSON.stringify(updatedReports));
-      loadSavedReports();
-      setMessage("Laporan berhasil dihapus!");
       setTimeout(() => setMessage(""), 3000);
+    }
+  };
+
+  const handleViewReport = (report: LaporanHarianResponse) => {
+    // Konversi data backend kembali ke format form
+    const convertedData: MarketingFormData = {
+      salesProducts: [],
+      salesTargets: [],
+      salesRealization: [],
+      salesReturns: [],
+      salesObstacles: [],
+    };
+
+    report.rincian.forEach((item) => {
+      // Mapping berdasarkan kategori
+      if (item.kategoriUtama === "PENJUALAN") {
+        const productRow: ProductRow = {
+          id: Date.now().toString() + Math.random(),
+          productName: item.kategoriSub || "Produk",
+          description: item.keterangan,
+          amount: item.nilaiKuantitas || 0,
+        };
+        convertedData.salesProducts.push(productRow);
+      } else if (item.kategoriUtama === "TARGET_SALES") {
+        const formRow: FormRow = {
+          id: Date.now().toString() + Math.random(),
+          description: item.keterangan,
+          amount: item.nilaiKuantitas || 0,
+        };
+        convertedData.salesTargets.push(formRow);
+      } else if (item.kategoriUtama === "REALISASI_SALES") {
+        const formRow: FormRow = {
+          id: Date.now().toString() + Math.random(),
+          description: item.keterangan,
+          amount: item.nilaiKuantitas || 0,
+        };
+        convertedData.salesRealization.push(formRow);
+      } else if (item.kategoriUtama === "RETUR_POTONGAN") {
+        const formRow: FormRow = {
+          id: Date.now().toString() + Math.random(),
+          description: item.keterangan,
+          amount: item.nilaiKuantitas || 0,
+        };
+        convertedData.salesReturns.push(formRow);
+      } else if (item.kategoriUtama === "KENDALA_PENJUALAN") {
+        const formRow: FormRow = {
+          id: Date.now().toString() + Math.random(),
+          description: item.keterangan,
+          amount: item.nilaiKuantitas || 0,
+        };
+        convertedData.salesObstacles.push(formRow);
+      }
+    });
+
+    setFormData(convertedData);
+    setMessage(
+      `Menampilkan laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
+    );
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const handleEditReport = (report: LaporanHarianResponse) => {
+    handleViewReport(report);
+    setEditingReport(report);
+    setMessage(
+      `Mode edit: Laporan tanggal ${new Date(
+        report.tanggalLaporan
+      ).toLocaleDateString("id-ID")}`
+    );
+    setTimeout(() => setMessage(""), 3000);
+  };
+
+  const handleDeleteReport = async (report: LaporanHarianResponse) => {
+    if (confirm("Apakah Anda yakin ingin menghapus laporan ini dari server?")) {
+      try {
+        await laporanService.deleteLaporan(report.laporanId);
+        setMessage("Laporan berhasil dihapus dari server!");
+        loadSavedReports();
+      } catch (err) {
+        console.error("Gagal menghapus laporan:", err);
+        setMessage("Gagal menghapus laporan dari server.");
+      } finally {
+        setTimeout(() => setMessage(""), 3000);
+      }
     }
   };
 
   const clearForm = () => {
     setFormData({
-      salesPadud06: [],
-      salesSuperDeluxe: [],
-      salesSuperDeluxeRed: [],
-      salesPadud98: [],
-      salesPadud98Red: [],
-      salesPrimavera: [],
+      salesProducts: [],
       salesTargets: [],
       salesRealization: [],
       salesReturns: [],
       salesObstacles: [],
     });
+    setEditingReport(null);
     setMessage("Form telah dikosongkan");
     setTimeout(() => setMessage(""), 2000);
   };
@@ -215,9 +300,9 @@ export default function NewMarketingAdminPage() {
       />
 
       <div className="max-w-full mx-auto px-4 sm:px-6 lg:px-8 py-6">
-        {/* Main Layout: Left Panel (Form) + Right Panel (Preview) */}
+        {/* Layout Utama: Panel Kiri (Form) + Panel Kanan (Preview) */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-          {/* Left Panel - Form Editor */}
+          {/* Panel Kiri - Editor Form */}
           <div className="space-y-6">
             <EnhancedFormCard
               title="Editor Laporan Pemasaran"
@@ -226,69 +311,18 @@ export default function NewMarketingAdminPage() {
               isLoading={isLoading}
               divisionColor="green"
             >
-              {/* A. PENJUALAN HARIAN */}
+              {/* A. PENJUALAN HARIAN - Form Produk Fleksibel */}
               <div className="space-y-4">
                 <h3 className="text-md font-bold text-green-600 border-b border-green-200 pb-2">
                   A. PENJUALAN HARIAN
                 </h3>
 
-                <EnhancedDynamicForm
-                  title="1. Padud 0.6"
-                  subtitle=""
-                  buttonText="+ Tambah Penjualan Padud 0.6"
-                  rows={formData.salesPadud06}
-                  onRowsChange={(rows) => updateSection("salesPadud06", rows)}
-                  sectionColor="green"
-                />
-
-                <EnhancedDynamicForm
-                  title="2. Super Deluxe"
-                  subtitle=""
-                  buttonText="+ Tambah Penjualan Super Deluxe"
-                  rows={formData.salesSuperDeluxe}
-                  onRowsChange={(rows) =>
-                    updateSection("salesSuperDeluxe", rows)
-                  }
-                  sectionColor="green"
-                />
-
-                <EnhancedDynamicForm
-                  title="3. Super Deluxe Merah"
-                  subtitle=""
-                  buttonText="+ Tambah Super Deluxe Merah"
-                  rows={formData.salesSuperDeluxeRed}
-                  onRowsChange={(rows) =>
-                    updateSection("salesSuperDeluxeRed", rows)
-                  }
-                  sectionColor="green"
-                />
-
-                <EnhancedDynamicForm
-                  title="4. Padud 98"
-                  subtitle=""
-                  buttonText="+ Tambah Penjualan Padud 98"
-                  rows={formData.salesPadud98}
-                  onRowsChange={(rows) => updateSection("salesPadud98", rows)}
-                  sectionColor="green"
-                />
-
-                <EnhancedDynamicForm
-                  title="5. Padud 98 Merah"
-                  subtitle=""
-                  buttonText="+ Tambah Padud 98 Merah"
-                  rows={formData.salesPadud98Red}
-                  onRowsChange={(rows) =>
-                    updateSection("salesPadud98Red", rows)
-                  }
-                  sectionColor="green"
-                />
-
-                <EnhancedDynamicForm
-                  title="6. Primavera"
-                  subtitle=""
-                  buttonText="+ Tambah Penjualan Primavera"
-                  rows={formData.salesPrimavera}
-                  onRowsChange={(rows) => updateSection("salesPrimavera", rows)}
+                <FlexibleProductForm
+                  title="Penjualan Produk"
+                  subtitle="Tambahkan produk apa saja yang dijual hari ini"
+                  buttonText="+ Tambah Produk"
+                  products={formData.salesProducts}
+                  onProductsChange={(products) => updateSection("salesProducts", products)}
                   sectionColor="green"
                 />
               </div>
@@ -320,9 +354,7 @@ export default function NewMarketingAdminPage() {
                   subtitle="Realisasi penjualan per sales"
                   buttonText="+ Tambah Realisasi Sales"
                   rows={formData.salesRealization}
-                  onRowsChange={(rows) =>
-                    updateSection("salesRealization", rows)
-                  }
+                  onRowsChange={(rows) => updateSection("salesRealization", rows)}
                   sectionColor="green"
                 />
               </div>
@@ -361,12 +393,14 @@ export default function NewMarketingAdminPage() {
                 />
               </div>
 
-              {/* Messages */}
+              {/* Pesan */}
               {message && (
                 <Alert
                   className={
                     message.includes("berhasil")
                       ? "border-green-200 bg-green-50"
+                      : message.includes("Gagal") || message.includes("gagal")
+                      ? "border-red-200 bg-red-50"
                       : "border-blue-200 bg-blue-50"
                   }
                 >
@@ -374,6 +408,8 @@ export default function NewMarketingAdminPage() {
                     className={
                       message.includes("berhasil")
                         ? "text-green-800"
+                        : message.includes("Gagal") || message.includes("gagal")
+                        ? "text-red-800"
                         : "text-blue-800"
                     }
                   >
@@ -382,7 +418,7 @@ export default function NewMarketingAdminPage() {
                 </Alert>
               )}
 
-              {/* Action Buttons */}
+              {/* Tombol Aksi */}
               <div className="flex flex-col gap-3 pt-4 border-t">
                 <Button
                   type="submit"
@@ -391,8 +427,23 @@ export default function NewMarketingAdminPage() {
                   disabled={isLoading}
                 >
                   <Save className="h-5 w-5 mr-2" />
-                  {isLoading ? "Menyimpan..." : "Simpan Laporan"}
+                  {isLoading
+                    ? "Menyimpan..."
+                    : editingReport
+                    ? "Perbarui Laporan"
+                    : "Simpan Laporan"}
                 </Button>
+
+                {editingReport && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="lg"
+                    onClick={clearForm}
+                  >
+                    Batal Edit
+                  </Button>
+                )}
 
                 <div className="grid grid-cols-2 gap-3">
                   <Button type="button" variant="outline" size="lg">
@@ -409,7 +460,7 @@ export default function NewMarketingAdminPage() {
             </EnhancedFormCard>
           </div>
 
-          {/* Right Panel - Document Preview */}
+          {/* Panel Kanan - Preview Dokumen */}
           <div className="lg:sticky lg:top-6">
             <div className="bg-white rounded-lg shadow-sm border p-4 mb-4">
               <h2 className="text-lg font-bold text-gray-900 mb-4">
@@ -424,7 +475,7 @@ export default function NewMarketingAdminPage() {
           </div>
         </div>
 
-        {/* Bottom Panel - Report History */}
+        {/* Panel Bawah - Riwayat Laporan */}
         <ReportHistory
           reports={savedReports}
           onView={handleViewReport}
