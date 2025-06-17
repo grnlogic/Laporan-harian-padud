@@ -84,7 +84,7 @@ export default function NewMarketingAdminPage() {
       day: "numeric",
     };
     setCurrentDate(today.toLocaleDateString("id-ID", options));
- 
+
     // Muat laporan tersimpan dari backend
     loadSavedReports();
   }, [router]);
@@ -481,59 +481,7 @@ export default function NewMarketingAdminPage() {
                 </Alert>
               )}
 
-              {/* Tombol Aksi */}
-              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
-                <Button
-                  type="submit"
-                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
-                  size="lg"
-                  disabled={isLoading}
-                >
-                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                  {isLoading
-                    ? "Menyimpan..."
-                    : editingReport
-                    ? "Perbarui Laporan"
-                    : "Simpan Laporan"}
-                </Button>
-
-                {editingReport && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={clearForm}
-                  >
-                    Batal Edit
-                  </Button>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={handleExportPDF}
-                  >
-                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                    <span className="hidden sm:inline">Export PDF</span>
-                    <span className="sm:hidden">PDF</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={handlePrint}
-                  >
-                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                    Print
-                  </Button>
-                </div>
-              </div>
+             
             </EnhancedFormCard>
           </div>
 

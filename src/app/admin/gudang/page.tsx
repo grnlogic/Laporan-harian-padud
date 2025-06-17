@@ -31,123 +31,6 @@ interface WarehouseFormData {
   warehouseCondition: FormRow[];
 }
 
-// Custom Document Preview for Warehouse
-const WarehouseDocumentPreview = ({ data, userName, currentDate }: {
-  data: WarehouseFormData;
-  userName: string;
-  currentDate: string;
-}) => {
-  const hasData = Object.values(data).some(section => section.length > 0);
-
-  if (!hasData) {
-    return (
-      <div className="text-center text-gray-500 py-8">
-        <p className="text-sm">Belum ada data untuk ditampilkan</p>
-        <p className="text-xs mt-1">Tambahkan data pada form untuk melihat preview</p>
-      </div>
-    );
-  }
-
-  return (
-    <div className="space-y-4 text-xs sm:text-sm">
-      {/* Header */}
-      <div className="text-center border-b pb-4">
-        <h1 className="font-bold text-sm sm:text-base text-purple-600">
-          LAPORAN HARIAN DISTRIBUSI & GUDANG
-        </h1>
-        <p className="text-xs sm:text-sm mt-1">PT. PADUD JAYA</p>
-        <p className="text-xs text-gray-600 mt-1">{currentDate}</p>
-        <p className="text-xs text-gray-600">Pelapor: {userName}</p>
-      </div>
-
-      {/* A. Stock Bahan Baku Awal */}
-      {data.initialRawMaterialStock.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-purple-600 text-xs sm:text-sm">
-            A. STOCK BAHAN BAKU AWAL
-          </h3>
-          <div className="space-y-1">
-            {data.initialRawMaterialStock.map((item, index) => (
-              <div key={item.id} className="flex justify-between items-center py-1 border-b border-gray-100">
-                <span className="text-xs sm:text-sm flex-1 pr-2">{index + 1}. {item.description}</span>
-                <span className="text-xs sm:text-sm font-medium text-right">
-                  {item.amount} Kg
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* B. Pemakaian */}
-      {data.rawMaterialUsage.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-purple-600 text-xs sm:text-sm">
-            B. PEMAKAIAN
-          </h3>
-          <div className="space-y-1">
-            {data.rawMaterialUsage.map((item, index) => (
-              <div key={item.id} className="flex justify-between items-center py-1 border-b border-gray-100">
-                <span className="text-xs sm:text-sm flex-1 pr-2">{index + 1}. {item.description}</span>
-                <span className="text-xs sm:text-sm font-medium text-right">
-                  {item.amount} Kg
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* C. Stock Bahan Baku Akhir */}
-      {data.finalRawMaterialStock.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-purple-600 text-xs sm:text-sm">
-            C. STOCK BAHAN BAKU AKHIR
-          </h3>
-          <div className="space-y-1">
-            {data.finalRawMaterialStock.map((item, index) => (
-              <div key={item.id} className="flex justify-between items-center py-1 border-b border-gray-100">
-                <span className="text-xs sm:text-sm flex-1 pr-2">{index + 1}. {item.description}</span>
-                <span className="text-xs sm:text-sm font-medium text-right">
-                  {item.amount} Kg
-                </span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* D. Kondisi Gudang */}
-      {data.warehouseCondition.length > 0 && (
-        <div className="space-y-2">
-          <h3 className="font-semibold text-purple-600 text-xs sm:text-sm">
-            D. KONDISI GUDANG
-          </h3>
-          <div className="space-y-1">
-            {data.warehouseCondition.map((item, index) => (
-              <div key={item.id} className="py-1 border-b border-gray-100">
-                <span className="text-xs sm:text-sm">{index + 1}. {item.description}</span>
-                {item.amount > 0 && (
-                  <span className="text-xs sm:text-sm ml-2 text-gray-600">
-                    ({item.amount})
-                  </span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Footer */}
-      <div className="pt-4 border-t text-center">
-        <p className="text-xs text-gray-500">
-          Dibuat pada: {new Date().toLocaleString('id-ID')}
-        </p>
-      </div>
-    </div>
-  );
-};
-
 export default function NewWarehouseAdminPage() {
   const router = useRouter();
   const [userName, setUserName] = useState("");
@@ -247,26 +130,26 @@ export default function NewWarehouseAdminPage() {
     const semuaRincian = [
       ...formData.initialRawMaterialStock.map((row) => ({
         ...row,
-        kategoriUtama: "STOCK BAHAN BAKU",
+        kategoriUtama: "STOK_BAHAN_BAKU", // ✅ Perbaikan: hapus spasi
         kategoriSub: "AWAL",
         satuan: "Kg",
       })),
       ...formData.rawMaterialUsage.map((row) => ({
         ...row,
-        kategoriUtama: "PEMAKAIAN",
-        kategoriSub: undefined,
+        kategoriUtama: "PEMAKAIAN_BAHAN_BAKU", // ✅ Perbaikan
+        kategoriSub: null,
         satuan: "Kg",
       })),
       ...formData.finalRawMaterialStock.map((row) => ({
         ...row,
-        kategoriUtama: "STOCK BAHAN BAKU",
+        kategoriUtama: "STOK_BAHAN_BAKU", // ✅ Perbaikan: hapus spasi
         kategoriSub: "AKHIR",
         satuan: "Kg",
       })),
       ...formData.warehouseCondition.map((row) => ({
         ...row,
-        kategoriUtama: "KONDISI GUDANG",
-        kategoriSub: undefined,
+        kategoriUtama: "KONDISI_GUDANG", // ✅ Perbaikan: hapus spasi
+        kategoriSub: null,
         satuan: "",
       })),
     ];
@@ -428,10 +311,10 @@ export default function NewWarehouseAdminPage() {
       />
 
       <div className="max-w-full mx-auto px-2 sm:px-4 lg:px-8 py-4 lg:py-6">
-        {/* Mobile: Stack vertically, Desktop: Side by side */}
-        <div className="flex flex-col xl:grid xl:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
+        {/* Main Layout: Left Panel (Form) + Right Panel (Preview) */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-4 lg:gap-6 mb-4 lg:mb-6">
           {/* Left Panel - Form Editor */}
-          <div className="space-y-4 lg:space-y-6 order-2 xl:order-1">
+          <div className="space-y-4 lg:space-y-6">
             <EnhancedFormCard
               title="Editor Laporan Gudang"
               onClear={clearForm}
@@ -544,85 +427,28 @@ export default function NewWarehouseAdminPage() {
                 </Alert>
               )}
 
-              {/* Action Buttons - Mobile Optimized */}
-              <div className="flex flex-col gap-3 pt-4 border-t">
-                <Button
-                  type="submit"
-                  className="w-full h-12 text-base font-medium"
-                  size="lg"
-                  disabled={isLoading}
-                >
-                  <Save className="h-5 w-5 mr-2" />
-                  {isLoading ? "Menyimpan..." : "Simpan Laporan"}
-                </Button>
-
-                <div className="grid grid-cols-2 gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 text-sm"
-                    onClick={handleExportPDF}
-                  >
-                    <FileDown className="h-4 w-4 mr-1 sm:mr-2" />
-                    <span className="hidden sm:inline">Export PDF</span>
-                    <span className="sm:hidden">PDF</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 text-sm"
-                    onClick={handlePrint}
-                  >
-                    <Printer className="h-4 w-4 mr-1 sm:mr-2" />
-                    Print
-                  </Button>
-                </div>
-              </div>
+              {/* Action Buttons */}
+              
             </EnhancedFormCard>
           </div>
 
-          {/* Right Panel - Document Preview - Show on top in mobile */}
-          <div className="order-1 xl:order-2 xl:sticky xl:top-6 xl:self-start">
-            <div className="bg-white rounded-lg shadow-sm border p-3 lg:p-4 mb-4">
-              {/* Mobile: Collapsible preview */}
-              <div className="xl:hidden">
-                <details className="group">
-                  <summary className="cursor-pointer text-base font-bold text-gray-900 mb-3 list-none flex items-center justify-between">
-                    <span>Preview Dokumen</span>
-                    <span className="transition-transform group-open:rotate-180">▼</span>
-                  </summary>
-                  <div className="max-h-64 overflow-y-auto">
-                    <WarehouseDocumentPreview 
-                      data={formData} 
-                      userName={userName} 
-                      currentDate={currentDate} 
-                    />
-                  </div>
-                </details>
-              </div>
-
-              {/* Desktop: Always visible */}
-              <div className="hidden xl:block">
-                <h2 className="text-lg font-bold text-gray-900 mb-4">
-                  Preview Dokumen
-                </h2>
-                <div className="max-h-[calc(100vh-12rem)] overflow-y-auto">
-                  <WarehouseDocumentPreview 
-                    data={formData} 
-                    userName={userName} 
-                    currentDate={currentDate} 
-                  />
-                </div>
-              </div>
+          {/* Right Panel - Document Preview */}
+          <div className="xl:sticky xl:top-6 xl:self-start">
+            <div className="bg-white rounded-lg shadow-sm border p-3 lg:p-4 mb-4 max-h-96 xl:max-h-[calc(100vh-8rem)] overflow-y-auto">
+              <h2 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">
+                Preview Dokumen
+              </h2>
+              <DocumentPreview
+                division="Gudang"
+                date={new Date().toISOString()}
+                data={formData}
+              />
             </div>
           </div>
         </div>
 
         {/* Bottom Panel - Report History */}
-        <div className="mt-6">
+        <div className="mt-4 lg:mt-6">
           <ReportHistory
             reports={savedReports}
             onView={handleViewReport}

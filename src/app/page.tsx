@@ -20,7 +20,7 @@ import { UserPlus, ChevronDown, ChevronUp } from "lucide-react";
 import Link from "next/link";
 import { authService } from "@/lib/api";
 import Image from "next/image";
-import Logo from "../assets/Adobe Express - file.png";
+import CompanyLogo from "@/assets/Adobe Express - file.png";
 
 export default function LoginPage() {
   const [username, setUsername] = useState("");
@@ -108,137 +108,144 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 flex items-center justify-center p-4">
-      <div className="max-w-md w-full space-y-8">
-        {/* Login Form */}
-        <div className="bg-white rounded-xl shadow-lg p-8">
-          {/* Header */}
-          <div className="text-center mb-8">
-            <div className="flex justify-center mb-4">
-              {/* Menggunakan logo perusahaan dari assets */}
-              <div className="bg-white p-2 rounded-full shadow-lg">
-                <Image
-                  src={Logo}
-                  alt="PADUD JAYA Logo"
-                  width={64}
-                  height={64}
-                  className="w-16 h-16 object-contain"
-                />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">
-              PADUD JAYA
-            </h1>
-            <p className="text-lg text-gray-600">Sistem Laporan Harian</p>
+    <div className="min-h-screen bg-gradient-to-br from-blue-600 to-purple-700 flex items-center justify-center p-4">
+      <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-8">
+        {/* Header dengan Logo */}
+        <div className="text-center mb-8">
+          <div className="flex justify-center mb-4">
+            {/* Ganti icon gedung dengan logo perusahaan */}
+            <Image
+              src={CompanyLogo}
+              alt="Padud Jaya Putera Logo"
+              width={80}
+              height={80}
+              className="rounded-full bg-gray-100 p-2"
+            />
+          </div>
+          <h1 className="text-2xl font-bold text-gray-900 mb-2">
+            CV. PADUD JAYA PUTERA
+          </h1>
+          <p className="text-gray-600">Sistem Laporan Harian</p>
+        </div>
+
+        {/* Form Login */}
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-2">
+            <Input
+              id="username"
+              type="text"
+              placeholder="Masukkan username"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              className="h-11 transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
           </div>
 
-          <Card className="shadow-lg">
-            <CardHeader className="space-y-1">
-              <CardTitle className="text-2xl text-center">
-                Masuk ke Sistem
-              </CardTitle>
-              <CardDescription className="text-center">
-                Masukkan kredensial Anda untuk mengakses sistem
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <form onSubmit={handleLogin} className="space-y-4">
-                <div className="space-y-2">
-                  <Input
-                    id="username"
-                    type="text"
-                    placeholder="Masukkan username"
-                    value={username}
-                    onChange={(e) => setUsername(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
+          <div className="space-y-2">
+            <Input
+              id="password"
+              type="password"
+              placeholder="Masukkan password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              className="h-11 transition-all duration-200 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            />
+          </div>
 
-                <div className="space-y-2">
-                  <Input
-                    id="password"
-                    type="password"
-                    placeholder="Masukkan password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="h-11"
-                  />
-                </div>
+          {error && (
+            <Alert variant="destructive" className="animate-in slide-in-from-top-2 duration-300">
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
 
-                {error && (
-                  <Alert variant="destructive">
-                    <AlertDescription>{error}</AlertDescription>
-                  </Alert>
-                )}
-
-                <Button
-                  type="submit"
-                  className="w-full h-11"
-                  disabled={isLoading}
-                >
-                  {isLoading ? "Masuk..." : "Masuk"}
-                </Button>
-              </form>
-
-              <div className="mt-6 text-center space-y-2">
-                <p className="text-sm text-gray-600">
-                  Belum punya akun?{" "}
-                  <Link
-                    href="/register"
-                    className="font-medium text-blue-600 hover:text-blue-500"
-                  >
-                    Daftar di sini
-                  </Link>
-                </p>
-
-                <button
-                  type="button"
-                  onClick={() => setShowForgotPassword(true)}
-                  className="text-sm text-red-600 hover:text-red-500 font-medium underline"
-                >
-                  Lupa Password? Butuh Bantuan?
-                </button>
+          <Button
+            type="submit"
+            className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]"
+            disabled={isLoading}
+          >
+            {isLoading ? (
+              <div className="flex items-center space-x-2">
+                <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+                <span>Masuk...</span>
               </div>
+            ) : (
+              "Masuk"
+            )}
+          </Button>
 
-              {/* Status System Dropdown */}
-              <div className="mt-6">
-                <button
-                  type="button"
-                  onClick={() => setShowStatus(!showStatus)}
-                  className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-colors"
-                >
-                  <span className="text-sm font-medium text-gray-700">
-                    Status Sistem
-                  </span>
-                  {showStatus ? (
-                    <ChevronUp className="h-4 w-4 text-gray-600" />
-                  ) : (
-                    <ChevronDown className="h-4 w-4 text-gray-600" />
-                  )}
-                </button>
+          <div className="mt-6 text-center space-y-2">
+            <p className="text-sm text-gray-600">
+              Belum punya akun?{" "}
+              <Link
+                href="/register"
+                className="font-medium text-blue-600 hover:text-blue-500 transition-colors duration-200"
+              >
+                Daftar di sini
+              </Link>
+            </p>
 
-                {showStatus && (
-                  <div className="mt-2 p-4 bg-gray-50 rounded-lg border">
-                    <StatusIndicator />
-                  </div>
-                )}
+            <button
+              type="button"
+              onClick={() => setShowForgotPassword(true)}
+              className="text-sm text-red-600 hover:text-red-500 font-medium underline transition-colors duration-200"
+            >
+              Lupa Password? Butuh Bantuan?
+            </button>
+          </div>
+
+          {/* Status System Dropdown - Enhanced with smooth animations */}
+          <div className="mt-6">
+            <button
+              type="button"
+              onClick={() => setShowStatus(!showStatus)}
+              className="w-full flex items-center justify-between p-3 bg-gray-50 hover:bg-gray-100 rounded-lg transition-all duration-300 ease-in-out transform hover:scale-[1.01] active:scale-[0.99] group"
+            >
+              <span className="text-sm font-medium text-gray-700 group-hover:text-gray-900 transition-colors duration-200">
+                Status Sistem
+              </span>
+              <div className={`transform transition-all duration-300 ease-in-out ${showStatus ? 'rotate-180' : 'rotate-0'}`}>
+                <ChevronDown className="h-4 w-4 text-gray-600 group-hover:text-gray-800 transition-colors duration-200" />
               </div>
+            </button>
 
-              {/* Info untuk testing */}
-              <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-                <h4 className="text-sm font-medium text-gray-700 mb-2">
-                  Info Penggunaan:
-                </h4>
-                <ul className="text-xs text-gray-600 space-y-1">
-                  <li>• Gunakan akun yang sudah didaftarkan</li>
-                  <li>
-                    • Sistem akan otomatis mengarahkan sesuai role dan divisi
-                  </li>
-                </ul>
+            {/* Dropdown Content with smooth slide animation */}
+            <div className={`
+              overflow-hidden transition-all duration-300 ease-in-out
+              ${showStatus 
+                ? 'max-h-96 opacity-100 mt-2' 
+                : 'max-h-0 opacity-0 mt-0'
+              }
+            `}>
+              <div className={`
+                p-4 bg-gray-50 rounded-lg border transform transition-all duration-300 ease-in-out
+                ${showStatus 
+                  ? 'translate-y-0 scale-100' 
+                  : '-translate-y-2 scale-95'
+                }
+              `}>
+                <StatusIndicator />
               </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </div>
+
+          {/* Info untuk testing - Enhanced styling */}
+          <div className="mt-6 p-4 bg-gradient-to-r from-blue-50 to-purple-50 rounded-lg border border-blue-100 transform transition-all duration-200 hover:scale-[1.01]">
+            <h4 className="text-sm font-medium text-gray-700 mb-2 flex items-center">
+              <div className="w-2 h-2 bg-blue-500 rounded-full mr-2 animate-pulse"></div>
+              Info Penggunaan:
+            </h4>
+            <ul className="text-xs text-gray-600 space-y-1">
+              <li className="flex items-start">
+                <span className="text-blue-500 mr-1">•</span>
+                <span>Gunakan akun yang sudah didaftarkan</span>
+              </li>
+              <li className="flex items-start">
+                <span className="text-blue-500 mr-1">•</span>
+                <span>Sistem akan otomatis mengarahkan sesuai role dan divisi</span>
+              </li>
+            </ul>
+          </div>
+        </form>
       </div>
 
       {/* Forgot Password Modal */}

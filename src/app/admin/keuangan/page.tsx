@@ -71,7 +71,10 @@ export default function NewFinanceAdminPage() {
     const userRole = localStorage.getItem("userRole");
 
     // Fix: Accept both ROLE_KEUANGAN and ADMIN
-    if (!storedUserName || (userRole !== "ADMIN" && userRole !== "ROLE_KEUANGAN")) {
+    if (
+      !storedUserName ||
+      (userRole !== "ADMIN" && userRole !== "ROLE_KEUANGAN")
+    ) {
       router.push("/");
       return;
     }
@@ -619,58 +622,7 @@ export default function NewFinanceAdminPage() {
               )}
 
               {/* Action Buttons */}
-              <div className="flex flex-col gap-2 lg:gap-3 pt-4 border-t">
-                <Button
-                  type="submit"
-                  className="w-full h-12 lg:h-11 text-sm lg:text-base"
-                  size="lg"
-                  disabled={isLoading}
-                >
-                  <Save className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                  {isLoading
-                    ? "Menyimpan..."
-                    : editingReport
-                    ? "Perbarui Laporan"
-                    : "Simpan Laporan"}
-                </Button>
-
-                {editingReport && (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={clearForm}
-                  >
-                    Batal Edit
-                  </Button>
-                )}
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 lg:gap-3">
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={handleExportPDF}
-                  >
-                    <FileDown className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                    <span className="hidden sm:inline">Export PDF</span>
-                    <span className="sm:hidden">PDF</span>
-                  </Button>
-
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="lg"
-                    className="h-12 lg:h-11 text-sm lg:text-base"
-                    onClick={handlePrint}
-                  >
-                    <Printer className="h-4 w-4 lg:h-5 lg:w-5 mr-2" />
-                    Print
-                  </Button>
-                </div>
-              </div>
+              
             </EnhancedFormCard>
           </div>
 
@@ -680,11 +632,54 @@ export default function NewFinanceAdminPage() {
               <h2 className="text-base lg:text-lg font-bold text-gray-900 mb-3 lg:mb-4">
                 Preview Dokumen
               </h2>
+              
+              {/* Debug info - untuk melihat apakah data ada */}
+              {process.env.NODE_ENV === 'development' && (
+                <div className="text-xs text-gray-500 mb-2">
+                  Debug: {Object.values(formData).reduce((total, section) => total + section.length, 0)} items total
+                  <br/>
+                  Data: {JSON.stringify(Object.keys(formData).reduce((acc, key) => {
+                    acc[key] = formData[key as keyof FinanceFormData].length;
+                    return acc;
+                  }, {} as Record<string, number>))}
+                </div>
+              )}
+              
               <DocumentPreview
                 division="Keuangan"
                 date={new Date().toISOString()}
                 data={formData}
               />
+              
+              {/* Fallback jika tidak ada data */}
+              {Object.values(formData).every(section => section.length === 0) && (
+                <div className="text-center text-gray-500 py-8">
+                  <p className="text-sm">Belum ada data untuk ditampilkan</p>
+                  <p className="text-xs mt-1">Mulai isi form untuk melihat preview</p>
+                </div>
+              )}
+              
+              {/* Action Buttons for Export/Print */}
+              <div className="flex flex-wrap gap-2 mt-4 pt-4 border-t">
+                <Button
+                  type="button"
+                  onClick={handleExportPDF}
+                  className="bg-red-600 hover:bg-red-700 text-white text-xs lg:text-sm px-3 py-1.5"
+                  disabled={Object.values(formData).every(section => section.length === 0)}
+                >
+                  <FileDown className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
+                  Export PDF
+                </Button>
+                <Button
+                  type="button"
+                  onClick={handlePrint}
+                  className="bg-gray-600 hover:bg-gray-700 text-white text-xs lg:text-sm px-3 py-1.5"
+                  disabled={Object.values(formData).every(section => section.length === 0)}
+                >
+                  <Printer className="h-3 w-3 lg:h-4 lg:w-4 mr-1" />
+                  Print
+                </Button>
+              </div>
             </div>
           </div>
         </div>
