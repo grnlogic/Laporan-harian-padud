@@ -62,17 +62,15 @@
     "zod": "^3.25.64"
   },
   "devDependencies": {
-    "@eslint/eslintrc": "^3",
-    "@tailwindcss/postcss": "^4",
-    "@types/jspdf": "^2.3.0",
     "@types/node": "^20",
-    "@types/react": "^19",
-    "@types/react-dom": "^19",
-    "autoprefixer": "^10.4.16",
-    "eslint": "^9",
-    "eslint-config-next": "15.3.3",
-    "postcss": "^8.4.31",
-    "tailwindcss": "^3.4.0",
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "@types/jspdf": "^2.0.0",
+    "autoprefixer": "^10.4.19",
+    "eslint": "^8",
+    "eslint-config-next": "14.2.5",
+    "postcss": "^8.4.39",
+    "tailwindcss": "^3.4.4",
     "typescript": "^5"
   }
 }
