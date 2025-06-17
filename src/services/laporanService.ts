@@ -1,7 +1,16 @@
 // Lokasi File: src/lib/laporan.service.ts (disarankan ganti nama file)
 
-import { apiRequest } from "@/lib/api";
-import type { LaporanHarianResponse, LaporanHarianRequest } from "@/types/api"; // Asumsi tipe ini ada di src/types/api.d.ts
+import { apiRequest } from '@/lib/api';
+import { LaporanHarianResponse, LaporanHarianRequest, PaginationParams } from '@/types/api';
+
+export interface LaporanFilter extends PaginationParams {
+  tanggalMulai?: string;
+  tanggalSelesai?: string;
+  kategoriUtama?: string;
+  kategoriSub?: string;
+  userId?: string;
+  satuan?: string;
+}
 
 export const laporanService = {
   /**
@@ -16,8 +25,38 @@ export const laporanService = {
    * Mengambil semua laporan dari semua pengguna (hanya untuk Super Admin).
    * @returns Promise<LaporanHarianResponse[]>
    */
-  getAllLaporan: async (): Promise<LaporanHarianResponse[]> => {
-    return await apiRequest("/v1/laporan/semua");
+  getAllLaporan: async (filters: LaporanFilter = {}): Promise<LaporanHarianResponse[]> => {
+    try {
+      console.log("🔄 Calling getAllLaporan using existing endpoint...");
+      
+      // GUNAKAN apiRequest yang sudah ada dengan endpoint /v1/laporan/semua
+      const response = await apiRequest('/v1/laporan/semua');
+      
+      console.log("✅ API Response:", response);
+      console.log("📊 Number of reports received:", response?.length || 0);
+      
+      // Jika response adalah array langsung
+      if (Array.isArray(response)) {
+        return response;
+      }
+      
+      // Jika response dibungkus dalam object dengan property data
+      if (response && response.data && Array.isArray(response.data)) {
+        return response.data;
+      }
+      
+      // Jika response success tapi data kosong
+      if (response && response.success && response.data) {
+        return Array.isArray(response.data) ? response.data : [];
+      }
+      
+      console.log("⚠️ Unexpected response format:", response);
+      return [];
+      
+    } catch (error) {
+      console.error("❌ Error in getAllLaporan:", error);
+      throw error;
+    }
   },
 
   /**
@@ -116,6 +155,25 @@ export const laporanService = {
    * @returns Promise<LaporanHarianResponse> - Objek laporan yang diminta
    */
   getLaporanById: async (id: number): Promise<LaporanHarianResponse> => {
-    return await apiRequest(`/v1/laporan/${id}`);
+    try {
+      console.log("🔄 Getting laporan by ID:", id);
+      const response = await apiRequest(`/v1/laporan/${id}`);
+      
+      if (response && response.data) {
+        return response.data;
+      }
+      return response;
+    } catch (error) {
+      console.error("❌ Error getting laporan by ID:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Mengambil opsi filter untuk laporan.
+   * @returns Promise<any> - Opsi filter yang tersedia
+   */
+  getFilterOptions: async () => {
+    return await apiRequest("/v1/laporan/filter-options");
   },
 };
